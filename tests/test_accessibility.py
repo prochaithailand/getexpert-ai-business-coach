@@ -1,0 +1,59 @@
+import re
+import unittest
+from pathlib import Path
+
+
+def _rgb(hex_color: str) -> tuple[int, int, int]:
+    value = hex_color.lstrip("#")
+    return tuple(int(value[index : index + 2], 16) for index in (0, 2, 4))
+
+
+def _luminance(hex_color: str) -> float:
+    channels = []
+    for value in _rgb(hex_color):
+        normalized = value / 255
+        channels.append(normalized / 12.92 if normalized <= 0.04045 else ((normalized + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def contrast_ratio(foreground: str, background: str) -> float:
+    first, second = sorted((_luminance(foreground), _luminance(background)), reverse=True)
+    return (first + 0.05) / (second + 0.05)
+
+
+class AccessibilityThemeTests(unittest.TestCase):
+    def test_all_declared_text_pairs_pass_wcag_aa(self) -> None:
+        pairs = {
+            "body": ("#1F2937", "#F5F7FA"),
+            "muted body": ("#475569", "#FFFFFF"),
+            "placeholder": ("#526173", "#FFFFFF"),
+            "sidebar": ("#FFFFFF", "#0B2E59"),
+            "sidebar hover": ("#FFFFFF", "#163F70"),
+            "primary button": ("#FFFFFF", "#0B2E59"),
+            "primary button hover": ("#FFFFFF", "#1D4E89"),
+            "secondary button": ("#0B2E59", "#FFFFFF"),
+            "active navigation": ("#0B2E59", "#FFFFFF"),
+            "hero supporting text": ("#DCE9F7", "#0B2E59"),
+            "link": ("#164F8C", "#FFFFFF"),
+            "alert": ("#12395F", "#E8F1FA"),
+        }
+        for name, (foreground, background) in pairs.items():
+            with self.subTest(name=name):
+                self.assertGreaterEqual(contrast_ratio(foreground, background), 4.5)
+
+    def test_css_defines_critical_accessible_states(self) -> None:
+        css = Path("ui/styles.py").read_text(encoding="utf-8")
+        for selector in ("input::placeholder", "label:has(input:checked)", '[data-testid="stAlert"]', "button:focus-visible"):
+            self.assertIn(selector, css)
+        self.assertIsNone(re.search(r"stSidebar[^\n]+\]\s+\*\s*\{\s*color:\s*#(?:fff|ffffff)", css, re.IGNORECASE))
+
+    def test_onboarding_summary_is_sticky_but_cards_are_not(self) -> None:
+        css = Path("ui/styles.py").read_text(encoding="utf-8")
+        self.assertIn(".st-key-onboarding_sticky_summary", css)
+        self.assertIn("position: sticky", css)
+        self.assertNotIn(".st-key-onboarding_steps_card {\n          position: sticky", css)
+        self.assertIn(".onboarding-title-mobile", css)
+
+
+if __name__ == "__main__":
+    unittest.main()

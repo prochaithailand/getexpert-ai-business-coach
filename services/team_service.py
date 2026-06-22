@@ -1,0 +1,243 @@
+from __future__ import annotations
+
+from dataclasses import replace
+from typing import Any
+
+from models import AppUser, MemberProfile, Team
+from services.auth_service import USER_STORE_KEY
+from services.progress_service import member_progress_key
+from services.permissions import can_access_team_management
+from services.supabase_service import get_authenticated_supabase_user, get_supabase_service, run_supabase_sync
+
+
+class SessionTeamRepository:
+    KEY = "teams"
+
+    def __init__(self, state: Any) -> None:
+        self.state = state
+
+    def list(self) -> list[Team]:
+        return sorted(
+            (Team.from_dict(team) for team in self.state.get(self.KEY, {}).values()),
+            key=lambda team: (team.name.casefold(), team.team_id),
+        )
+
+    def get(self, team_id: str) -> Team | None:
+        raw = self.state.get(self.KEY, {}).get(_team_id(team_id))
+        return Team.from_dict(raw) if raw else None
+
+    def create(self, team: Team) -> Team:
+        normalized = normalize_team(team)
+        store = dict(self.state.get(self.KEY, {}))
+        if normalized.team_id in store:
+            raise ValueError("รหัสทีมนี้มีอยู่ในระบบแล้ว")
+        store[normalized.team_id] = normalized.to_dict()
+        self.state[self.KEY] = store
+        self._persist_team(normalized)
+        return normalized
+
+    def update(self, original_team_id: str, team: Team) -> Team:
+        original_id = _team_id(original_team_id)
+        normalized = normalize_team(team)
+        store = dict(self.state.get(self.KEY, {}))
+        if original_id not in store:
+            raise KeyError("ไม่พบทีมที่ต้องการแก้ไข")
+        if normalized.team_id != original_id and normalized.team_id in store:
+            raise ValueError("รหัสทีมนี้มีอยู่ในระบบแล้ว")
+        del store[original_id]
+        store[normalized.team_id] = normalized.to_dict()
+        self.state[self.KEY] = store
+        self._sync_current_profile(original_id, normalized)
+        supabase = get_supabase_service(self.state)
+        authenticated = get_authenticated_supabase_user(self.state)
+        if supabase and authenticated and normalized.team_id != original_id:
+            run_supabase_sync(
+                self.state, supabase.rename_team, authenticated, original_id, normalized
+            )
+        else:
+            self._persist_team(normalized)
+        return normalized
+
+    def delete(self, team_id: str) -> None:
+        normalized_id = _team_id(team_id)
+        store = dict(self.state.get(self.KEY, {}))
+        if normalized_id not in store:
+            raise KeyError("ไม่พบทีมที่ต้องการลบ")
+        del store[normalized_id]
+        self.state[self.KEY] = store
+        self._sync_current_profile(normalized_id, None)
+        supabase = get_supabase_service(self.state)
+        authenticated = get_authenticated_supabase_user(self.state)
+        if supabase and authenticated:
+            run_supabase_sync(self.state, supabase.delete_team, authenticated, normalized_id)
+
+    def assign_leader(self, team_id: str, user: AppUser) -> Team:
+        if user.role == "Admin":
+            raise ValueError("ไม่สามารถกำหนดบัญชีผู้ดูแลระบบเป็นหัวหน้าทีม")
+        team = self.get(team_id)
+        if not team:
+            raise KeyError("ไม่พบทีมที่ต้องการกำหนดหัวหน้า")
+        updated_team = self.update(
+            team.team_id,
+            Team(team.name, team.team_id, user.full_name, team.primary_sponsor, team.notes),
+        )
+        self._assign_user(updated_team, user, "Leader")
+        return updated_team
+
+    def assign_members(self, team_id: str, users: list[AppUser]) -> list[MemberProfile]:
+        team = self.get(team_id)
+        if not team:
+            raise KeyError("ไม่พบทีมที่ต้องการกำหนดสมาชิก")
+        if any(user.role == "Admin" for user in users):
+            raise ValueError("ไม่สามารถกำหนดบัญชีผู้ดูแลระบบเป็นสมาชิกทีม")
+        return [self._assign_user(team, user, None) for user in users]
+
+    def ensure_profile_team(self, profile: MemberProfile | None) -> Team | None:
+        if not profile or not profile.team_id:
+            return None
+        existing = self.get(profile.team_id)
+        if existing:
+            return existing
+        if not profile.team_name:
+            return None
+        return self.create(
+            Team(
+                name=profile.team_name,
+                team_id=profile.team_id,
+                leader=profile.team_leader or "ยังไม่ระบุ",
+                primary_sponsor=profile.sponsor,
+                notes="นำเข้าจากโปรไฟล์สมาชิกเดิม",
+            )
+        )
+
+    def _sync_current_profile(self, original_team_id: str, team: Team | None) -> None:
+        raw_profile = self.state.get("member_profile")
+        if raw_profile:
+            profile = raw_profile if isinstance(raw_profile, MemberProfile) else MemberProfile.from_dict(raw_profile)
+            if _team_id(profile.team_id) == original_team_id:
+                updated = replace(
+                    profile,
+                    team_name=team.name if team else "",
+                    team_id=team.team_id if team else "",
+                    team_leader=team.leader if team else "",
+                )
+                self.state["member_profile"] = updated.to_dict()
+        registry = dict(self.state.get("member_profiles_by_key", {}))
+        changed = False
+        for member_key, raw in registry.items():
+            registered = raw if isinstance(raw, MemberProfile) else MemberProfile.from_dict(raw)
+            if _team_id(registered.team_id) != original_team_id:
+                continue
+            registry[member_key] = replace(
+                registered,
+                team_name=team.name if team else "",
+                team_id=team.team_id if team else "",
+                team_leader=team.leader if team else "",
+            ).to_dict()
+            changed = True
+        if changed:
+            self.state["member_profiles_by_key"] = registry
+        user_profiles = dict(self.state.get("member_profiles_by_user", {}))
+        user_profiles_changed = False
+        for email, raw in user_profiles.items():
+            registered = raw if isinstance(raw, MemberProfile) else MemberProfile.from_dict(raw)
+            if _team_id(registered.team_id) != original_team_id:
+                continue
+            user_profiles[email] = replace(
+                registered,
+                team_name=team.name if team else "",
+                team_id=team.team_id if team else "",
+                team_leader=team.leader if team else "",
+            ).to_dict()
+            user_profiles_changed = True
+        if user_profiles_changed:
+            self.state["member_profiles_by_user"] = user_profiles
+
+    def _persist_team(self, team: Team) -> None:
+        supabase = get_supabase_service(self.state)
+        authenticated = get_authenticated_supabase_user(self.state)
+        if supabase and authenticated:
+            run_supabase_sync(self.state, supabase.save_team, authenticated, team)
+
+    def _assign_user(
+        self,
+        team: Team,
+        user: AppUser,
+        role: str | None,
+    ) -> MemberProfile:
+        email = user.email.casefold()
+        raw = self.state.get("member_profiles_by_user", {}).get(email)
+        profile = MemberProfile.from_dict(raw) if raw else MemberProfile(
+            name=user.full_name,
+            occupation="",
+            role=user.role,
+        )
+        assigned = replace(
+            profile,
+            team_name=team.name,
+            team_id=team.team_id,
+            team_leader=team.leader,
+            role=role or profile.role,
+        )
+        profiles_by_user = dict(self.state.get("member_profiles_by_user", {}))
+        profiles_by_user[email] = assigned.to_dict()
+        self.state["member_profiles_by_user"] = profiles_by_user
+
+        registry = dict(self.state.get("member_profiles_by_key", {}))
+        if raw:
+            registry.pop(member_progress_key(profile), None)
+        registry[member_progress_key(assigned)] = assigned.to_dict()
+        self.state["member_profiles_by_key"] = registry
+
+        users = dict(self.state.get(USER_STORE_KEY, {}))
+        assigned_user = replace(user, role=role or user.role)
+        users[email] = assigned_user.to_dict()
+        self.state[USER_STORE_KEY] = users
+        if str(self.state.get("authenticated_user", {}).get("email", "")).casefold() == email:
+            self.state["member_profile"] = assigned.to_dict()
+
+        supabase = get_supabase_service(self.state)
+        authenticated = get_authenticated_supabase_user(self.state)
+        if supabase and authenticated:
+            run_supabase_sync(
+                self.state,
+                supabase.assign_user_to_team,
+                authenticated,
+                email,
+                assigned,
+                role,
+            )
+        return assigned
+
+
+def normalize_team(team: Team) -> Team:
+    name = team.name.strip()
+    team_id = _team_id(team.team_id)
+    leader = team.leader.strip()
+    if not name:
+        raise ValueError("กรุณาระบุชื่อทีม")
+    if not team_id:
+        raise ValueError("กรุณาระบุรหัสทีม")
+    if not leader:
+        raise ValueError("กรุณาระบุหัวหน้าทีม")
+    return Team(
+        name=name,
+        team_id=team_id,
+        leader=leader,
+        primary_sponsor=team.primary_sponsor.strip(),
+        notes=team.notes.strip(),
+    )
+
+
+def resolve_profile_team(state: Any, profile: MemberProfile) -> Team | None:
+    if not profile.team_id:
+        return None
+    return SessionTeamRepository(state).get(profile.team_id)
+
+
+def can_manage_teams(profile: MemberProfile | None) -> bool:
+    return can_access_team_management(profile)
+
+
+def _team_id(value: str) -> str:
+    return value.strip().upper()
