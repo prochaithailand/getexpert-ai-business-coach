@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 from pathlib import Path
 from typing import Any
 
@@ -438,20 +437,19 @@ def render_knowledge_base() -> None:
         st.warning("ไม่พบเอกสารที่ตรงกับการค้นหา กรุณาลองใช้คำค้นหรือเลือกหมวดหมู่อื่น")
         return
 
-    header = st.columns([4.8, 1.8, 1.2, 1.4])
+    header = st.columns([5, 2, 1.4, 1])
     header[0].markdown("**ชื่อเอกสาร**")
     header[1].markdown("**หมวดหมู่**")
     header[2].markdown("**ขนาดไฟล์**")
     header[3].markdown("**ดำเนินการ**")
 
     for index, document in enumerate(matches):
-        row = st.columns([4.8, 1.8, 1.2, 1.4])
+        row = st.columns([5, 2, 1.4, 1])
         row[0].markdown(f"**{document.name}**")
         row[1].write(document.category)
         row[2].write(document.display_size)
-        document_path = Path(document.path)
-        if row[3].button("เปิดอ่าน", key=f"open_pdf_{document_path.name}", use_container_width=True):
-            st.session_state.selected_knowledge_document = str(document_path)
+        if row[3].button("เปิดอ่าน", key=f"open_pdf_{document.path}", use_container_width=True):
+            st.session_state.selected_knowledge_document = str(document.path)
         if index < len(matches) - 1:
             st.divider()
 
@@ -465,29 +463,7 @@ def render_knowledge_base() -> None:
             del st.session_state.selected_knowledge_document
             st.rerun()
         st.caption(f"{selected.category} | {selected.display_size}")
-        selected_path = Path(selected.path)
-        try:
-            pdf_bytes = selected_path.read_bytes()
-        except OSError:
-            st.error("ไม่สามารถแสดงเอกสารได้ กรุณาติดต่อผู้ดูแลระบบ")
-            return
-
-        try:
-            encoded_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
-            st.markdown(
-                f"""
-                <iframe
-                    src="data:application/pdf;base64,{encoded_pdf}"
-                    width="100%"
-                    height="800"
-                    style="border: 1px solid #D7DEE8; border-radius: 12px;"
-                    title="{selected.name}">
-                </iframe>
-                """,
-                unsafe_allow_html=True,
-            )
-        except Exception:
-            st.error("ไม่สามารถแสดงเอกสารได้ กรุณาติดต่อผู้ดูแลระบบ")
+        st.pdf(selected.path, height=760, key=f"pdf_viewer_{selected.path.name}")
 
 
 def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
