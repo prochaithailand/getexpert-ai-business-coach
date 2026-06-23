@@ -5,7 +5,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import streamlit as st
-import httpx
 import streamlit.components.v1 as components
 
 from config import APP_SUBTITLE, APP_TITLE, DEFAULT_EMBEDDING_MODEL, DEFAULT_OPENAI_MODEL, NAV_ITEMS
@@ -15,7 +14,7 @@ from services.knowledge_service import KnowledgeService
 from services.openai_coach_service import OpenAICoachService
 from services.profile_repository import SessionProfileRepository
 from services.permissions import visible_navigation
-from services.supabase_service import SupabaseError, SupabaseService
+from services.supabase_service import SupabaseService
 from services.settings_service import load_supabase_config
 from ui.styles import apply_global_styles
 from views.pages import (
@@ -264,22 +263,11 @@ if authenticated_user is None:
             unsafe_allow_html=True,
         )
         auth_page = st.radio("เมนูบัญชี", ("เข้าสู่ระบบ", "สมัครสมาชิก"), label_visibility="collapsed")
-        st.caption(supabase_config.safe_debug_message)
     render_mobile_menu_toggle()
     if auth_page == "เข้าสู่ระบบ":
         render_login(user_store)
     else:
         render_register(user_store)
-    if supabase:
-        try:
-            missing_tables = supabase.verify_schema()
-        except (SupabaseError, httpx.HTTPError) as error:
-            st.warning(f"ไม่สามารถตรวจสอบโครงสร้าง Supabase ได้: {error}")
-        else:
-            if missing_tables:
-                st.warning("ยังไม่ได้ติดตั้งตาราง Supabase กรุณารันไฟล์ migration ในโฟลเดอร์ supabase/migrations")
-    else:
-        st.info("ยังไม่ได้ตั้งค่า SUPABASE_URL และ SUPABASE_ANON_KEY ระบบจึงใช้หน่วยความจำชั่วคราว")
     st.stop()
 
 repository = SessionProfileRepository(st.session_state)
@@ -314,14 +302,7 @@ with st.sidebar:
     previous_page = st.session_state.get("_previous_main_navigation")
     should_collapse_sidebar = bool(previous_page and previous_page != page)
     st.session_state["_previous_main_navigation"] = page
-    st.caption(supabase_config.safe_debug_message)
     st.markdown("<div class='sidebar-spacer'></div>", unsafe_allow_html=True)
-    if profile and profile.is_complete:
-        st.success(f"โปรไฟล์พร้อมใช้งาน: {profile.name}")
-    else:
-        st.info(f"เข้าสู่ระบบในชื่อ {authenticated_user.full_name} กรุณากรอกโปรไฟล์สมาชิก")
-    if sync_error := st.session_state.get("supabase_sync_error"):
-        st.warning(sync_error)
 
 render_mobile_menu_toggle()
 

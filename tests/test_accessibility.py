@@ -78,6 +78,15 @@ class AccessibilityThemeTests(unittest.TestCase):
         self.assertIn("min-width: 769px", app_source)
         self.assertNotIn("getexpert-mobile-menu-toggle", css)
 
+    def test_sidebar_does_not_render_developer_config_status(self) -> None:
+        app_source = Path("app.py").read_text(encoding="utf-8")
+        self.assertNotIn("safe_debug_message", app_source)
+        self.assertNotIn("SUPABASE_URL", app_source)
+        self.assertNotIn("SUPABASE_ANON_KEY", app_source)
+        self.assertNotIn("Config source", app_source)
+        self.assertNotIn("โปรไฟล์พร้อมใช้งาน", app_source)
+        self.assertNotIn("supabase_sync_error", app_source)
+
     def test_dashboard_charts_define_distinct_target_and_actual_colors(self) -> None:
         dashboard_source = Path("views/dashboard_page.py").read_text(encoding="utf-8")
         self.assertIn("ผลลัพธ์จริง", dashboard_source)
