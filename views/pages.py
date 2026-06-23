@@ -469,7 +469,7 @@ def render_knowledge_base() -> None:
         try:
             pdf_bytes = selected_path.read_bytes()
         except OSError:
-            st.error("ไม่สามารถแสดงเอกสารในหน้านี้ได้ กรุณาติดต่อผู้ดูแลระบบ")
+            st.error("ไม่สามารถแสดงเอกสารได้ กรุณาติดต่อผู้ดูแลระบบ")
             return
 
         try:
@@ -477,9 +477,9 @@ def render_knowledge_base() -> None:
             st.markdown(
                 f"""
                 <iframe
-                    src="data:application/pdf;base64,{encoded_pdf}#toolbar=0&navpanes=0&scrollbar=1"
+                    src="data:application/pdf;base64,{encoded_pdf}"
                     width="100%"
-                    height="760"
+                    height="800"
                     style="border: 1px solid #D7DEE8; border-radius: 12px;"
                     title="{selected.name}">
                 </iframe>
@@ -487,7 +487,7 @@ def render_knowledge_base() -> None:
                 unsafe_allow_html=True,
             )
         except Exception:
-            st.error("ไม่สามารถแสดงเอกสารในหน้านี้ได้ กรุณาติดต่อผู้ดูแลระบบ")
+            st.error("ไม่สามารถแสดงเอกสารได้ กรุณาติดต่อผู้ดูแลระบบ")
 
 
 def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
