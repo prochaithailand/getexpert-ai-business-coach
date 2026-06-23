@@ -110,9 +110,10 @@ def apply_global_styles() -> None:
         .feature-card p { color: var(--text-muted) !important; font-size: .92rem; }
         .st-key-onboarding_sticky_summary {
           position: sticky; top: .6rem; z-index: 900;
-          background: rgba(255, 255, 255, .96); border: 1px solid #B8C6D6;
+          background: linear-gradient(135deg, #FFF7D6 0%, #FFE8A3 100%);
+          border: 2px solid #F59E0B;
           border-radius: 16px; padding: .85rem 1rem .7rem;
-          box-shadow: 0 10px 28px rgba(11, 46, 89, .16);
+          box-shadow: 0 12px 30px rgba(146, 64, 14, .22);
           backdrop-filter: blur(8px);
         }
         .onboarding-title {
@@ -120,6 +121,13 @@ def apply_global_styles() -> None:
         }
         .onboarding-title-mobile { display: none; }
         .st-key-onboarding_sticky_summary [data-testid="stProgress"] { margin-bottom: 0; }
+        .st-key-onboarding_sticky_summary [data-testid="stProgress"] > div > div > div > div {
+          background-color: #F59E0B !important;
+        }
+        .st-key-onboarding_sticky_summary [data-testid="stProgress"] p {
+          color: #78350F !important;
+          font-weight: 800;
+        }
         .st-key-onboarding_steps_card { margin-top: .75rem; }
         .onboarding-step {
           background: var(--white); border: 1px solid #C7D0DC; border-radius: 14px;

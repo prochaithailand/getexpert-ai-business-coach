@@ -6,6 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 import httpx
+import streamlit.components.v1 as components
 
 from config import APP_SUBTITLE, APP_TITLE, DEFAULT_EMBEDDING_MODEL, DEFAULT_OPENAI_MODEL, NAV_ITEMS
 from services.coach_service import LocalCoachService
@@ -153,6 +154,9 @@ with st.sidebar:
         label_visibility="collapsed",
         key="main_navigation",
     )
+    previous_page = st.session_state.get("_previous_main_navigation")
+    should_collapse_sidebar = bool(previous_page and previous_page != page)
+    st.session_state["_previous_main_navigation"] = page
     st.caption(supabase_config.safe_debug_message)
     st.markdown("<div class='sidebar-spacer'></div>", unsafe_allow_html=True)
     if profile and profile.is_complete:
@@ -161,6 +165,26 @@ with st.sidebar:
         st.info(f"เข้าสู่ระบบในชื่อ {authenticated_user.full_name} กรุณากรอกโปรไฟล์สมาชิก")
     if sync_error := st.session_state.get("supabase_sync_error"):
         st.warning(sync_error)
+
+if should_collapse_sidebar:
+    components.html(
+        """
+        <script>
+        const collapseSidebarOnMobile = () => {
+          if (!window.matchMedia("(max-width: 768px)").matches) return;
+          const doc = window.parent.document;
+          const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+          const collapseButton = doc.querySelector('[data-testid="stSidebarCollapseButton"] button');
+          if (sidebar && collapseButton && sidebar.getBoundingClientRect().width > 0) {
+            collapseButton.click();
+          }
+        };
+        window.setTimeout(collapseSidebarOnMobile, 120);
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 if page == "หน้าแรก":
     render_home(profile)

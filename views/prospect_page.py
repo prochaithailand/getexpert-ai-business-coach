@@ -147,39 +147,40 @@ def _render_prospect_table(
         st.warning("ไม่พบผู้มุ่งหวังที่ตรงกับตัวกรอง")
         return
 
-    header = st.columns([2.1, 0.6, 1.25, 1.25, 1.7, 1.15, 0.7, 0.55])
+    header = st.columns([1.9, 0.95, 0.55, 1.15, 1.15, 1.45, 1.05, 0.65, 0.5])
     for column, label in zip(
         header,
-        ("ชื่อ / เบอร์โทร", "เกรด", "สถานะปัจจุบัน", "วันติดตาม", "สถานะใหม่", "อัปเดตสถานะ", "แก้ไข", "ลบ"),
+        ("ชื่อ / เบอร์โทร", "จังหวัด", "เกรด", "สถานะปัจจุบัน", "วันติดตาม", "สถานะใหม่", "อัปเดตสถานะ", "แก้ไข", "ลบ"),
     ):
         column.markdown(f"**{label}**")
 
     for prospect in prospects:
         with st.container(border=True):
-            columns = st.columns([2.1, 0.6, 1.25, 1.25, 1.7, 1.15, 0.7, 0.55])
+            columns = st.columns([1.9, 0.95, 0.55, 1.15, 1.15, 1.45, 1.05, 0.65, 0.5])
             columns[0].markdown(
                 f"**{prospect['name']}**<br><small>{prospect['phone'] or 'ไม่ระบุเบอร์โทร'}</small>",
                 unsafe_allow_html=True,
             )
-            columns[1].write(prospect["category"])
-            columns[2].write(prospect["status"])
-            columns[3].write(prospect.get("next_follow_up") or "ยังไม่กำหนด")
-            new_status = columns[4].selectbox(
+            columns[1].write(prospect.get("province") or "ไม่ระบุ")
+            columns[2].write(prospect["category"])
+            columns[3].write(prospect["status"])
+            columns[4].write(prospect.get("next_follow_up") or "ยังไม่กำหนด")
+            new_status = columns[5].selectbox(
                 f"สถานะใหม่ของ {prospect['name']}",
                 CONTACT_STATUSES,
                 index=CONTACT_STATUSES.index(prospect["status"]),
                 key=f"quick_status_{prospect['id']}",
                 label_visibility="collapsed",
             )
-            if columns[5].button("อัปเดตสถานะ", key=f"update_status_{prospect['id']}", width="stretch"):
+            if columns[6].button("อัปเดตสถานะ", key=f"update_status_{prospect['id']}", width="stretch"):
                 updated = update_contact_status(workplan, prospect["id"], new_status)
                 repository.save(profile, updated)
                 st.session_state.prospect_flash_message = f"อัปเดตสถานะของ {prospect['name']} เรียบร้อยแล้ว"
                 st.rerun()
-            if columns[6].button("แก้ไข", key=f"edit_prospect_{prospect['id']}", width="stretch"):
+            if columns[7].button("แก้ไข", key=f"edit_prospect_{prospect['id']}", width="stretch"):
                 st.session_state.prospect_edit_id = prospect["id"]
                 st.session_state.pop("prospect_delete_id", None)
-            if columns[7].button("ลบ", key=f"delete_prospect_{prospect['id']}", width="stretch"):
+            if columns[8].button("ลบ", key=f"delete_prospect_{prospect['id']}", width="stretch"):
                 st.session_state.prospect_delete_id = prospect["id"]
                 st.session_state.pop("prospect_edit_id", None)
 
@@ -291,4 +292,3 @@ def _date_value(value: str) -> date | None:
         return date.fromisoformat(value)
     except (TypeError, ValueError):
         return None
-

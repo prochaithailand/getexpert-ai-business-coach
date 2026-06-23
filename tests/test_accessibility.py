@@ -51,8 +51,22 @@ class AccessibilityThemeTests(unittest.TestCase):
         css = Path("ui/styles.py").read_text(encoding="utf-8")
         self.assertIn(".st-key-onboarding_sticky_summary", css)
         self.assertIn("position: sticky", css)
+        self.assertIn("linear-gradient(135deg, #FFF7D6", css)
+        self.assertIn("background-color: #F59E0B", css)
         self.assertNotIn(".st-key-onboarding_steps_card {\n          position: sticky", css)
         self.assertIn(".onboarding-title-mobile", css)
+
+    def test_mobile_navigation_auto_collapse_script_is_present(self) -> None:
+        app_source = Path("app.py").read_text(encoding="utf-8")
+        self.assertIn("collapseSidebarOnMobile", app_source)
+        self.assertIn('max-width: 768px', app_source)
+        self.assertIn('stSidebarCollapseButton', app_source)
+
+    def test_dashboard_charts_define_distinct_target_and_actual_colors(self) -> None:
+        dashboard_source = Path("views/dashboard_page.py").read_text(encoding="utf-8")
+        self.assertIn("ผลลัพธ์จริง", dashboard_source)
+        self.assertIn('"domain": ["เป้าหมาย", "ผลลัพธ์จริง"]', dashboard_source)
+        self.assertIn('"range": ["#0B2E59", "#F59E0B"]', dashboard_source)
 
 
 if __name__ == "__main__":

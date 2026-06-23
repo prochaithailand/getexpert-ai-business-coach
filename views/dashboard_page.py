@@ -127,15 +127,47 @@ def _render_charts(snapshot: dict[str, Any]) -> None:
     for index, (title, target, actual, unit) in enumerate(charts):
         with columns[index % 2]:
             st.markdown(f"**{title} ({unit})**")
-            st.bar_chart(
-                [
-                    {"รายการ": "เป้าหมาย", "ค่า": float(target)},
-                    {"รายการ": "ทำได้จริง", "ค่า": float(actual)},
-                ],
-                x="รายการ",
-                y="ค่า",
-                color="#1D4E89",
-                height=230,
+            st.vega_lite_chart(
+                {
+                    "values": [
+                        {"รายการ": "เป้าหมาย", "ค่า": float(target)},
+                        {"รายการ": "ผลลัพธ์จริง", "ค่า": float(actual)},
+                    ]
+                },
+                {
+                    "height": 230,
+                    "mark": {"type": "bar", "cornerRadiusTopLeft": 6, "cornerRadiusTopRight": 6},
+                    "encoding": {
+                        "x": {
+                            "field": "รายการ",
+                            "type": "nominal",
+                            "axis": {"labelAngle": 0, "title": None},
+                        },
+                        "y": {
+                            "field": "ค่า",
+                            "type": "quantitative",
+                            "axis": {"title": unit},
+                        },
+                        "color": {
+                            "field": "รายการ",
+                            "type": "nominal",
+                            "scale": {
+                                "domain": ["เป้าหมาย", "ผลลัพธ์จริง"],
+                                "range": ["#0B2E59", "#F59E0B"],
+                            },
+                            "legend": {"title": "คำอธิบาย"},
+                        },
+                        "tooltip": [
+                            {"field": "รายการ", "type": "nominal", "title": "รายการ"},
+                            {"field": "ค่า", "type": "quantitative", "title": unit, "format": ",.0f"},
+                        ],
+                    },
+                    "config": {
+                        "axis": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
+                        "legend": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
+                    },
+                },
+                width="stretch",
             )
 
 

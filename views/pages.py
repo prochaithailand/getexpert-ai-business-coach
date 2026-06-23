@@ -204,6 +204,28 @@ def render_member_profile(repository: ProfileRepository) -> None:
         repository.save(profile)
         if profile.is_complete:
             st.success("บันทึกโปรไฟล์เรียบร้อย ระบบพร้อมจัดทำคำแนะนำเฉพาะบุคคลให้คุณแล้ว")
+            st.markdown("### ขั้นตอนถัดไปที่แนะนำ")
+            st.info("เลือกดำเนินการต่อได้ทันที โดยเฉพาะบนมือถือให้แตะปุ่มด้านล่างเพื่อไปหน้าถัดไป")
+            first, second, third = st.columns(3)
+            first.button(
+                "สร้างแผน 30 วัน",
+                type="primary",
+                on_click=_navigate_to,
+                args=("แผนปฏิบัติการ 30 วัน",),
+                use_container_width=True,
+            )
+            second.button(
+                "บันทึกผู้มุ่งหวัง",
+                on_click=_navigate_to,
+                args=("ผู้มุ่งหวัง",),
+                use_container_width=True,
+            )
+            third.button(
+                "ไปที่ Dashboard",
+                on_click=_navigate_to,
+                args=("Dashboard สมาชิก",),
+                use_container_width=True,
+            )
         else:
             st.warning("บันทึกข้อมูลแล้ว กรุณาระบุชื่อและอาชีพเพื่อให้ระบบจัดทำคำแนะนำได้สมบูรณ์")
 

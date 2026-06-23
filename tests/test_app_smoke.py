@@ -274,6 +274,11 @@ class AppSmokeTests(unittest.TestCase):
             self.assertIn(required, status_filter.options)
         for action in ("อัปเดตสถานะ", "แก้ไข", "ลบ"):
             self.assertTrue(any(item.label == action for item in app.button))
+        rendered = " ".join(
+            [*(item.value for item in app.markdown), *(item.value for item in app.caption)]
+        )
+        self.assertIn("จังหวัด", rendered)
+        self.assertIn("กรุงเทพมหานคร", rendered)
 
     def test_prospect_quick_status_edit_and_delete_update_session_state(self) -> None:
         profile = MemberProfile(name="สมาชิก Action", occupation="เจ้าของกิจการ")
@@ -369,6 +374,9 @@ class AppSmokeTests(unittest.TestCase):
         next(item for item in app.text_input if item.label == "ผู้แนะนำ").set_value("คุณสมชาย")
         next(item for item in app.button if item.label == "บันทึกโปรไฟล์สมาชิก").click().run()
         self.assertEqual(app.session_state["member_profile"]["sponsor"], "คุณสมชาย")
+        button_labels = [item.label for item in app.button]
+        for cta in ("สร้างแผน 30 วัน", "บันทึกผู้มุ่งหวัง", "ไปที่ Dashboard"):
+            self.assertIn(cta, button_labels)
 
     def test_admin_can_create_team_from_team_management_page(self) -> None:
         profile = MemberProfile(name="ผู้ดูแลทีม", occupation="ผู้นำธุรกิจ", role="Admin")

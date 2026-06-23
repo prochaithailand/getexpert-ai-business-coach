@@ -87,6 +87,7 @@ def _render_contacts(
         income = second.number_input("รายได้ต่อเดือน (บาท)", min_value=0.0, step=1000.0)
         phone = third.text_input("เบอร์โทร", placeholder="0xx-xxx-xxxx")
         category = first.selectbox("ประเภท A/B/C/D", CONTACT_TYPES)
+        province = second.text_input("จังหวัด", placeholder="ตัวอย่าง: กรุงเทพมหานคร")
         submitted = st.form_submit_button("เพิ่มรายชื่อ", type="primary", width="stretch")
     if submitted:
         if not name.strip():
@@ -102,6 +103,7 @@ def _render_contacts(
                     "income": income,
                     "phone": phone,
                     "category": category,
+                    "province": province,
                 },
             )
             repository.save(profile, updated)
