@@ -77,6 +77,12 @@ class AccessibilityThemeTests(unittest.TestCase):
             '[data-testid="stHeaderActionElements"]',
             '[data-testid="stStatusWidget"]',
             ".stDeployButton",
+            ".stAppDeployButton",
+            '[class*="viewerBadge"]',
+            '[aria-label*="Streamlit" i]',
+            'iframe[src*="streamlit" i]',
+            'body > iframe[style*="position: fixed" i]',
+            'body > div[style*="position: fixed" i][style*="bottom" i][style*="right" i] iframe',
             ".viewerBadge_container__1QSob",
             'a[href*="streamlit.io/cloud"]',
         ):
