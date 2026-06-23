@@ -30,6 +30,35 @@ def apply_global_styles() -> None:
         a:hover { color: var(--navy); }
         hr { border-color: #C7D0DC !important; }
 
+        /* Hide Streamlit Cloud chrome for end users */
+        #MainMenu,
+        footer,
+        [data-testid="stToolbar"],
+        [data-testid="stHeaderActionElements"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"],
+        [data-testid="manage-app-button"],
+        .stDeployButton,
+        .viewerBadge_container__1QSob,
+        .viewerBadge_link__1S137,
+        a[href*="streamlit.io/cloud"],
+        a[href*="share.streamlit.io"] {
+          display: none !important;
+          visibility: hidden !important;
+          height: 0 !important;
+          width: 0 !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+        header [data-testid="stToolbar"],
+        header [data-testid="stHeaderActionElements"] {
+          display: none !important;
+        }
+        [data-testid="stHeader"] {
+          background: transparent !important;
+          height: 0 !important;
+        }
+
         /* Sidebar and navigation */
         [data-testid="stSidebar"] {
           background: var(--navy);

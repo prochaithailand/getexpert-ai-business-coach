@@ -68,6 +68,22 @@ class AccessibilityThemeTests(unittest.TestCase):
         self.assertIn('"domain": ["เป้าหมาย", "ผลลัพธ์จริง"]', dashboard_source)
         self.assertIn('"range": ["#0B2E59", "#F59E0B"]', dashboard_source)
 
+    def test_streamlit_cloud_branding_and_toolbar_are_hidden_globally(self) -> None:
+        css = Path("ui/styles.py").read_text(encoding="utf-8")
+        for selector in (
+            "#MainMenu",
+            "footer",
+            '[data-testid="stToolbar"]',
+            '[data-testid="stHeaderActionElements"]',
+            '[data-testid="stStatusWidget"]',
+            ".stDeployButton",
+            ".viewerBadge_container__1QSob",
+            'a[href*="streamlit.io/cloud"]',
+        ):
+            self.assertIn(selector, css)
+        self.assertIn("pointer-events: none", css)
+        self.assertIn('[data-testid="stSidebarCollapseButton"]', css)
+
 
 if __name__ == "__main__":
     unittest.main()
