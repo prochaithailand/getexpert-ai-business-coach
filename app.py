@@ -53,6 +53,121 @@ def get_setting(name: str, default: str = "") -> str:
         return default
 
 
+def render_mobile_menu_toggle() -> None:
+    components.html(
+        """
+        <script>
+        const doc = window.parent.document;
+        const buttonId = "getexpert-mobile-menu-toggle";
+        const styleId = "getexpert-mobile-menu-toggle-style";
+        const sidebarOpenClass = "getexpert-mobile-sidebar-open";
+
+        if (!doc.getElementById(styleId)) {
+          const style = doc.createElement("style");
+          style.id = styleId;
+          style.textContent = `
+            #${buttonId} {
+              position: fixed;
+              top: max(0.65rem, env(safe-area-inset-top));
+              left: max(0.65rem, env(safe-area-inset-left));
+              z-index: 2147483000;
+              display: none;
+              align-items: center;
+              gap: 0.35rem;
+              min-height: 2.45rem;
+              padding: 0.48rem 0.78rem;
+              border: 2px solid #1D4E89;
+              border-radius: 999px;
+              background: #FFFFFF;
+              color: #0B2E59;
+              font: 800 0.95rem/1.1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+              box-shadow: 0 8px 22px rgba(11, 46, 89, 0.20);
+              cursor: pointer;
+            }
+            #${buttonId}:focus-visible {
+              outline: 3px solid #F4C95D;
+              outline-offset: 2px;
+            }
+            @media (max-width: 768px) {
+              #${buttonId} { display: inline-flex; }
+              .block-container { padding-top: 4.35rem !important; }
+              body.${sidebarOpenClass} [data-testid="stSidebar"] {
+                transform: translateX(0) !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                min-width: min(82vw, 20rem) !important;
+                width: min(82vw, 20rem) !important;
+                max-width: min(82vw, 20rem) !important;
+                left: 0 !important;
+                z-index: 2147482999 !important;
+                box-shadow: 0 18px 40px rgba(11, 46, 89, 0.34) !important;
+              }
+              body.${sidebarOpenClass} [data-testid="stSidebar"] > div {
+                transform: translateX(0) !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                width: 100% !important;
+              }
+            }
+            @media (min-width: 769px) {
+              #${buttonId} { display: none !important; }
+              body.${sidebarOpenClass} [data-testid="stSidebar"] {
+                transform: none !important;
+              }
+            }
+          `;
+          doc.head.appendChild(style);
+        }
+
+        let button = doc.getElementById(buttonId);
+        if (!button) {
+          button = doc.createElement("button");
+          button.id = buttonId;
+          button.type = "button";
+          button.textContent = "☰ เมนู";
+          button.setAttribute("aria-label", "เปิดเมนูหลัก");
+          button.setAttribute("data-getexpert-menu-toggle", "true");
+          doc.body.appendChild(button);
+        }
+
+        button.onclick = () => {
+          const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+          const isOpen = sidebar && sidebar.getBoundingClientRect().width > 10;
+          if (isOpen) return;
+
+          doc.body.classList.add(sidebarOpenClass);
+
+          const openButton =
+            doc.querySelector('[data-testid="stSidebarCollapsedControl"] button') ||
+            doc.querySelector('[data-testid="stSidebarCollapsedControl"]') ||
+            doc.querySelector('[data-testid="stExpandSidebarButton"] button') ||
+            doc.querySelector('[data-testid="stExpandSidebarButton"]') ||
+            doc.querySelector('[data-testid="stSidebarCollapseButton"] button');
+          if (openButton && typeof openButton.click === "function") {
+            openButton.click();
+          }
+        };
+
+        if (!window.parent.__getExpertMobileMenuListenerAttached) {
+          window.parent.__getExpertMobileMenuListenerAttached = true;
+          doc.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!target || !target.closest) return;
+            const clickedNavigation =
+              target.closest('[data-testid="stSidebar"] [role="radiogroup"] label') ||
+              target.closest('[data-testid="stSidebar"] input[type="radio"]');
+            if (clickedNavigation) {
+              window.setTimeout(() => doc.body.classList.remove(sidebarOpenClass), 220);
+            }
+          }, true);
+        }
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
 @st.cache_resource
 def get_coach_service() -> LocalCoachService:
     """สร้างบริการโค้ชและเชื่อมต่อคลังความรู้ของระบบ"""
@@ -109,6 +224,7 @@ if authenticated_user is None:
         )
         auth_page = st.radio("เมนูบัญชี", ("เข้าสู่ระบบ", "สมัครสมาชิก"), label_visibility="collapsed")
         st.caption(supabase_config.safe_debug_message)
+    render_mobile_menu_toggle()
     if auth_page == "เข้าสู่ระบบ":
         render_login(user_store)
     else:
@@ -165,6 +281,8 @@ with st.sidebar:
         st.info(f"เข้าสู่ระบบในชื่อ {authenticated_user.full_name} กรุณากรอกโปรไฟล์สมาชิก")
     if sync_error := st.session_state.get("supabase_sync_error"):
         st.warning(sync_error)
+
+render_mobile_menu_toggle()
 
 if should_collapse_sidebar:
     components.html(

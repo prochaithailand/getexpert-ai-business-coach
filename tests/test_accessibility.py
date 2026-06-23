@@ -62,6 +62,19 @@ class AccessibilityThemeTests(unittest.TestCase):
         self.assertIn('max-width: 768px', app_source)
         self.assertIn('stSidebarCollapseButton', app_source)
 
+    def test_mobile_menu_toggle_is_available_and_not_hidden_with_branding(self) -> None:
+        app_source = Path("app.py").read_text(encoding="utf-8")
+        css = Path("ui/styles.py").read_text(encoding="utf-8")
+        self.assertIn("render_mobile_menu_toggle", app_source)
+        self.assertIn("getexpert-mobile-menu-toggle", app_source)
+        self.assertIn("getexpert-mobile-sidebar-open", app_source)
+        self.assertIn("☰ เมนู", app_source)
+        self.assertIn("stSidebarCollapsedControl", app_source)
+        self.assertIn("stExpandSidebarButton", app_source)
+        self.assertIn("data-getexpert-menu-toggle", app_source)
+        self.assertIn("max-width: 768px", app_source)
+        self.assertNotIn("getexpert-mobile-menu-toggle", css)
+
     def test_dashboard_charts_define_distinct_target_and_actual_colors(self) -> None:
         dashboard_source = Path("views/dashboard_page.py").read_text(encoding="utf-8")
         self.assertIn("ผลลัพธ์จริง", dashboard_source)
