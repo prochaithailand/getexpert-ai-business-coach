@@ -57,10 +57,19 @@ def render_mobile_menu_toggle() -> None:
         """
         <script>
         const doc = window.parent.document;
-        const buttonId = "getexpert-mobile-menu-toggle";
-        const styleId = "getexpert-mobile-menu-toggle-style";
+        const legacyButtonIds = ["getexpert-mobile-menu-toggle", "getexpert-mobile-menu-toggle-v2", "getexpert-mobile-menu-toggle-v3"];
+        const legacyCloseButtonIds = ["getexpert-mobile-sidebar-close", "getexpert-mobile-sidebar-close-v2", "getexpert-mobile-sidebar-close-v3"];
+        const buttonId = "getexpert-mobile-menu-toggle-v4";
+        const closeButtonId = "getexpert-mobile-sidebar-close-v4";
+        const styleId = "getexpert-mobile-menu-toggle-style-v4";
         const sidebarOpenClass = "getexpert-mobile-sidebar-open";
+        const sidebarClosedClass = "getexpert-mobile-sidebar-closed";
         const desktopBreakpoint = "(min-width: 769px)";
+
+        [...legacyButtonIds, ...legacyCloseButtonIds, buttonId, closeButtonId].forEach((legacyId) => {
+          const legacyElement = doc.getElementById(legacyId);
+          if (legacyElement) legacyElement.remove();
+        });
 
         if (!doc.getElementById(styleId)) {
           const style = doc.createElement("style");
@@ -88,9 +97,50 @@ def render_mobile_menu_toggle() -> None:
               outline: 3px solid #F4C95D;
               outline-offset: 2px;
             }
+            #${closeButtonId} {
+              position: fixed;
+              top: max(0.65rem, env(safe-area-inset-top));
+              left: min(72vw, 17rem);
+              z-index: 2147483001;
+              display: none;
+              align-items: center;
+              justify-content: center;
+              min-width: 2.5rem;
+              min-height: 2.45rem;
+              padding: 0.45rem 0.65rem;
+              border: 2px solid #FFFFFF;
+              border-radius: 999px;
+              background: #0B2E59;
+              color: #FFFFFF;
+              font: 900 1rem/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+              box-shadow: 0 8px 22px rgba(11, 46, 89, 0.28);
+              cursor: pointer;
+            }
+            #${closeButtonId}:focus-visible {
+              outline: 3px solid #F4C95D;
+              outline-offset: 2px;
+            }
             @media (max-width: 768px) {
               #${buttonId} { display: inline-flex; }
+              #${closeButtonId} { display: inline-flex; }
+              body.${sidebarClosedClass} #${closeButtonId} { display: none !important; }
               .block-container { padding-top: 4.35rem !important; }
+              body.${sidebarClosedClass} [data-testid="stSidebar"] {
+                transform: translateX(-100%) !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                min-width: 0 !important;
+                width: 0 !important;
+                max-width: 0 !important;
+                left: -100vw !important;
+                box-shadow: none !important;
+              }
+              body.${sidebarClosedClass} [data-testid="stSidebar"] > div {
+                transform: translateX(-100%) !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                width: 0 !important;
+              }
               body.${sidebarOpenClass} [data-testid="stSidebar"] {
                 transform: translateX(0) !important;
                 visibility: visible !important;
@@ -119,6 +169,7 @@ def render_mobile_menu_toggle() -> None:
                 border-color: #D7DEE8;
                 box-shadow: 0 7px 18px rgba(11, 46, 89, 0.16);
               }
+              #${closeButtonId} { display: none !important; }
               body.${sidebarOpenClass} [data-testid="stSidebar"] {
                 transform: translateX(0) !important;
                 visibility: visible !important;
@@ -141,25 +192,49 @@ def render_mobile_menu_toggle() -> None:
           doc.head.appendChild(style);
         }
 
-        let button = doc.getElementById(buttonId);
-        if (!button) {
-          button = doc.createElement("button");
-          button.id = buttonId;
-          button.type = "button";
-          button.textContent = "☰ เมนู";
-          button.setAttribute("aria-label", "เปิดเมนูหลัก");
-          button.setAttribute("data-getexpert-menu-toggle", "true");
-          doc.body.appendChild(button);
-        }
+        let button = doc.createElement("button");
+        button.id = buttonId;
+        button.type = "button";
+        button.textContent = "☰ เมนู";
+        button.setAttribute("aria-label", "เปิดเมนูหลัก");
+        button.setAttribute("data-getexpert-menu-toggle", "true");
+        doc.body.appendChild(button);
+
+        let closeButton = doc.createElement("button");
+        closeButton.id = closeButtonId;
+        closeButton.type = "button";
+        closeButton.textContent = "<<";
+        closeButton.setAttribute("aria-label", "ปิดเมนูหลัก");
+        closeButton.setAttribute("data-getexpert-menu-close", "true");
+        doc.body.appendChild(closeButton);
 
         const isDesktop = () => window.parent.matchMedia(desktopBreakpoint).matches;
 
-        button.onclick = () => {
+        const closeMobileSidebar = () => {
+          doc.body.classList.remove(sidebarOpenClass);
+          doc.body.classList.add(sidebarClosedClass);
+        };
+
+        const syncMobileSidebarState = () => {
+          if (isDesktop()) {
+            doc.body.classList.remove(sidebarClosedClass);
+            return;
+          }
+          const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+          if (!sidebar) return;
+          const rect = sidebar.getBoundingClientRect();
+          if (rect.width <= 10 || rect.x < -10) {
+            doc.body.classList.add(sidebarClosedClass);
+          }
+        };
+
+        const toggleSidebarFromMenu = () => {
           const sidebar = doc.querySelector('[data-testid="stSidebar"]');
           const isOpen = sidebar && sidebar.getBoundingClientRect().width > 10;
 
           if (isDesktop() && doc.body.classList.contains(sidebarOpenClass)) {
             doc.body.classList.remove(sidebarOpenClass);
+            doc.body.classList.remove(sidebarClosedClass);
             return;
           }
 
@@ -170,37 +245,125 @@ def render_mobile_menu_toggle() -> None:
             } else {
               doc.body.classList.remove(sidebarOpenClass);
             }
+            doc.body.classList.remove(sidebarClosedClass);
             return;
           }
 
-          if (!isDesktop() && isOpen) return;
+          if (!isDesktop() && isOpen && !doc.body.classList.contains(sidebarClosedClass)) return;
 
+          doc.body.classList.remove(sidebarClosedClass);
           doc.body.classList.add(sidebarOpenClass);
 
           const openButton =
             doc.querySelector('[data-testid="stSidebarCollapsedControl"] button') ||
             doc.querySelector('[data-testid="stSidebarCollapsedControl"]') ||
             doc.querySelector('[data-testid="stExpandSidebarButton"] button') ||
-            doc.querySelector('[data-testid="stExpandSidebarButton"]') ||
-            doc.querySelector('[data-testid="stSidebarCollapseButton"] button');
+            doc.querySelector('[data-testid="stExpandSidebarButton"]');
           if (openButton && typeof openButton.click === "function") {
             openButton.click();
           }
         };
+
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+          event.stopPropagation();
+          toggleSidebarFromMenu();
+        });
+        button.setAttribute(
+          "onclick",
+          `event.preventDefault(); event.stopPropagation(); (function(){
+            const openClass = "${sidebarOpenClass}";
+            const closedClass = "${sidebarClosedClass}";
+            const isDesktop = window.matchMedia("${desktopBreakpoint}").matches;
+            const sidebar = document.querySelector('[data-testid="stSidebar"]');
+            const isOpen = sidebar && sidebar.getBoundingClientRect().width > 10;
+            if (isDesktop && document.body.classList.contains(openClass)) {
+              document.body.classList.remove(openClass);
+              document.body.classList.remove(closedClass);
+              return;
+            }
+            if (isDesktop && isOpen) {
+              const collapseButton = document.querySelector('[data-testid="stSidebarCollapseButton"] button');
+              if (collapseButton && typeof collapseButton.click === "function") collapseButton.click();
+              document.body.classList.remove(closedClass);
+              return;
+            }
+            if (!isDesktop && isOpen && !document.body.classList.contains(closedClass)) return;
+            document.body.classList.remove(closedClass);
+            document.body.classList.add(openClass);
+            const openButton =
+              document.querySelector('[data-testid="stSidebarCollapsedControl"] button') ||
+              document.querySelector('[data-testid="stSidebarCollapsedControl"]') ||
+              document.querySelector('[data-testid="stExpandSidebarButton"] button') ||
+              document.querySelector('[data-testid="stExpandSidebarButton"]');
+            if (openButton && typeof openButton.click === "function") window.setTimeout(() => openButton.click(), 50);
+          })();`
+        );
+        closeButton.onclick = (event) => {
+          event.preventDefault();
+          if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+          event.stopPropagation();
+          closeMobileSidebar();
+        };
+        closeButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+          event.stopPropagation();
+          closeMobileSidebar();
+        });
+        closeButton.setAttribute(
+          "onclick",
+          `event.preventDefault(); event.stopPropagation(); document.body.classList.remove("${sidebarOpenClass}"); document.body.classList.add("${sidebarClosedClass}");`
+        );
 
         if (!window.parent.__getExpertMobileMenuListenerAttached) {
           window.parent.__getExpertMobileMenuListenerAttached = true;
           doc.addEventListener("click", (event) => {
             const target = event.target;
             if (!target || !target.closest) return;
+            const clickedMenu = target.closest(`#${buttonId}`);
+            if (clickedMenu) {
+              event.preventDefault();
+              if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+              event.stopPropagation();
+              toggleSidebarFromMenu();
+              return;
+            }
+
+            const clickedClose = target.closest(`#${closeButtonId}`);
+            if (!isDesktop() && clickedClose) {
+              event.preventDefault();
+              if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+              event.stopPropagation();
+              closeMobileSidebar();
+              return;
+            }
+
+            const clickedCollapse =
+              target.closest('[data-testid="stSidebarCollapseButton"] button') ||
+              target.closest('[data-testid="stSidebarCollapseButton"]');
+            if (!isDesktop() && clickedCollapse) {
+              event.preventDefault();
+              event.stopPropagation();
+              closeMobileSidebar();
+              return;
+            }
+
             const clickedNavigation =
               target.closest('[data-testid="stSidebar"] [role="radiogroup"] label') ||
               target.closest('[data-testid="stSidebar"] input[type="radio"]');
             if (clickedNavigation) {
-              window.setTimeout(() => doc.body.classList.remove(sidebarOpenClass), 220);
+              window.setTimeout(() => {
+                doc.body.classList.remove(sidebarOpenClass);
+                if (!isDesktop()) {
+                  doc.body.classList.add(sidebarClosedClass);
+                }
+              }, 220);
             }
           }, true);
         }
+        window.setTimeout(syncMobileSidebarState, 250);
         </script>
         """,
         height=0,
