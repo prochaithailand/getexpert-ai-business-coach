@@ -4,7 +4,12 @@ from io import BytesIO
 from pypdf import PdfReader
 
 from models import MemberProfile
-from services.pdf_report_service import generate_member_report_pdf, member_report_filename
+from services.pdf_report_service import (
+    generate_member_report_pdf,
+    member_report_filename,
+    thai_pdf_font_paths,
+    thai_pdf_fonts_available,
+)
 
 
 class PdfReportServiceTests(unittest.TestCase):
@@ -44,6 +49,13 @@ class PdfReportServiceTests(unittest.TestCase):
     def test_filename_uses_required_format_and_sanitizes_invalid_characters(self) -> None:
         self.assertEqual(member_report_filename("สมชาย ใจดี"), "Member_Report_สมชาย_ใจดี.pdf")
         self.assertEqual(member_report_filename("สมชาย/ใจดี"), "Member_Report_สมชาย_ใจดี.pdf")
+
+    def test_pdf_uses_embedded_thai_fonts_from_assets_folder(self) -> None:
+        paths = thai_pdf_font_paths()
+
+        self.assertTrue(thai_pdf_fonts_available())
+        self.assertEqual(paths["regular"].as_posix().split("/")[-3:], ["assets", "fonts", "THSarabunNew.ttf"])
+        self.assertEqual(paths["bold"].as_posix().split("/")[-3:], ["assets", "fonts", "THSarabunNew-Bold.ttf"])
 
     def test_pdf_contains_thai_sections_member_data_and_insight(self) -> None:
         pdf = generate_member_report_pdf(self.profile, self.snapshot, self.insight)

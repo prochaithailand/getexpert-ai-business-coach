@@ -14,7 +14,13 @@ from services.dashboard_service import (
     dashboard_context,
     dashboard_signature,
 )
-from services.pdf_report_service import generate_member_report_pdf, member_report_filename
+from services.pdf_report_service import (
+    MISSING_THAI_FONT_MESSAGE,
+    generate_member_report_pdf,
+    member_report_filename,
+    thai_pdf_fonts_available,
+    thai_pdf_font_paths,
+)
 
 
 def render_member_dashboard(profile: MemberProfile | None, coach: CoachService) -> None:
@@ -183,6 +189,14 @@ def _render_pdf_export(
 ) -> None:
     assert profile is not None
     st.subheader("รายงานสมาชิก")
+    if not thai_pdf_fonts_available():
+        font_paths = thai_pdf_font_paths()
+        st.warning(
+            f"{MISSING_THAI_FONT_MESSAGE} "
+            f"({font_paths['regular'].as_posix()}, {font_paths['bold'].as_posix()})"
+        )
+        st.button("ดาวน์โหลดรายงาน PDF", disabled=True, width="stretch")
+        return
     fallback_insight = LocalCoachService().generate_dashboard_insight(
         profile,
         dashboard_context(snapshot),

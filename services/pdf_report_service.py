@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 from html import escape
 from io import BytesIO
@@ -15,6 +14,16 @@ BLUE = "#1D4E89"
 SILVER = "#D7DEE8"
 LIGHT_GRAY = "#F5F7FA"
 TEXT_DARK = "#1F2937"
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+THAI_PDF_FONT_PATHS = {
+    "regular": PROJECT_ROOT / "assets" / "fonts" / "THSarabunNew.ttf",
+    "bold": PROJECT_ROOT / "assets" / "fonts" / "THSarabunNew-Bold.ttf",
+}
+MISSING_THAI_FONT_MESSAGE = (
+    "ไม่พบฟอนต์ภาษาไทยสำหรับสร้าง PDF กรุณาเพิ่มไฟล์ "
+    "assets/fonts/THSarabunNew.ttf และ assets/fonts/THSarabunNew-Bold.ttf"
+)
 
 
 def member_report_filename(member_name: str) -> str:
@@ -190,22 +199,19 @@ def _register_thai_fonts(pdfmetrics, TTFont) -> tuple[str, str]:
     return regular_name, bold_name
 
 
+def thai_pdf_fonts_available() -> bool:
+    return all(path.is_file() for path in THAI_PDF_FONT_PATHS.values())
+
+
+def thai_pdf_font_paths() -> dict[str, Path]:
+    return dict(THAI_PDF_FONT_PATHS)
+
+
 def _find_font(bold: bool) -> Path | None:
-    custom = os.getenv("THAI_PDF_BOLD_FONT" if bold else "THAI_PDF_FONT")
-    candidates = [
-        custom,
-        "C:/Windows/Fonts/tahomabd.ttf" if bold else "C:/Windows/Fonts/tahoma.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansThai-Bold.ttf" if bold else "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansThai-Bold.ttf" if bold else "/usr/share/fonts/opentype/noto/NotoSansThai-Regular.ttf",
-    ]
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file():
-            return Path(candidate)
-    if bold:
-        return None
-    raise RuntimeError(
-        "ไม่พบฟอนต์ภาษาไทยสำหรับสร้าง PDF กรุณากำหนด THAI_PDF_FONT และ THAI_PDF_BOLD_FONT"
-    )
+    font_path = THAI_PDF_FONT_PATHS["bold" if bold else "regular"]
+    if font_path.is_file():
+        return font_path
+    raise RuntimeError(MISSING_THAI_FONT_MESSAGE)
 
 
 def _parse_insight(insight: str) -> dict[str, list[str]]:
