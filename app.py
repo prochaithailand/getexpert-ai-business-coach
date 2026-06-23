@@ -61,6 +61,7 @@ def render_mobile_menu_toggle() -> None:
         const buttonId = "getexpert-mobile-menu-toggle";
         const styleId = "getexpert-mobile-menu-toggle-style";
         const sidebarOpenClass = "getexpert-mobile-sidebar-open";
+        const desktopBreakpoint = "(min-width: 769px)";
 
         if (!doc.getElementById(styleId)) {
           const style = doc.createElement("style");
@@ -110,9 +111,31 @@ def render_mobile_menu_toggle() -> None:
               }
             }
             @media (min-width: 769px) {
-              #${buttonId} { display: none !important; }
+              #${buttonId} {
+                display: inline-flex !important;
+                top: 0.75rem;
+                left: 0.75rem;
+                min-height: 2.25rem;
+                padding: 0.42rem 0.72rem;
+                border-color: #D7DEE8;
+                box-shadow: 0 7px 18px rgba(11, 46, 89, 0.16);
+              }
               body.${sidebarOpenClass} [data-testid="stSidebar"] {
-                transform: none !important;
+                transform: translateX(0) !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                min-width: 20rem !important;
+                width: 20rem !important;
+                max-width: 20rem !important;
+                left: 0 !important;
+                z-index: 2147482999 !important;
+                box-shadow: 0 18px 40px rgba(11, 46, 89, 0.30) !important;
+              }
+              body.${sidebarOpenClass} [data-testid="stSidebar"] > div {
+                transform: translateX(0) !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                width: 100% !important;
               }
             }
           `;
@@ -130,10 +153,28 @@ def render_mobile_menu_toggle() -> None:
           doc.body.appendChild(button);
         }
 
+        const isDesktop = () => window.parent.matchMedia(desktopBreakpoint).matches;
+
         button.onclick = () => {
           const sidebar = doc.querySelector('[data-testid="stSidebar"]');
           const isOpen = sidebar && sidebar.getBoundingClientRect().width > 10;
-          if (isOpen) return;
+
+          if (isDesktop() && doc.body.classList.contains(sidebarOpenClass)) {
+            doc.body.classList.remove(sidebarOpenClass);
+            return;
+          }
+
+          if (isDesktop() && isOpen) {
+            const collapseButton = doc.querySelector('[data-testid="stSidebarCollapseButton"] button');
+            if (collapseButton && typeof collapseButton.click === "function") {
+              collapseButton.click();
+            } else {
+              doc.body.classList.remove(sidebarOpenClass);
+            }
+            return;
+          }
+
+          if (!isDesktop() && isOpen) return;
 
           doc.body.classList.add(sidebarOpenClass);
 

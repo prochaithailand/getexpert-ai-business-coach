@@ -68,11 +68,14 @@ class AccessibilityThemeTests(unittest.TestCase):
         self.assertIn("render_mobile_menu_toggle", app_source)
         self.assertIn("getexpert-mobile-menu-toggle", app_source)
         self.assertIn("getexpert-mobile-sidebar-open", app_source)
+        self.assertIn('desktopBreakpoint = "(min-width: 769px)"', app_source)
         self.assertIn("☰ เมนู", app_source)
         self.assertIn("stSidebarCollapsedControl", app_source)
         self.assertIn("stExpandSidebarButton", app_source)
+        self.assertIn("stSidebarCollapseButton", app_source)
         self.assertIn("data-getexpert-menu-toggle", app_source)
         self.assertIn("max-width: 768px", app_source)
+        self.assertIn("min-width: 769px", app_source)
         self.assertNotIn("getexpert-mobile-menu-toggle", css)
 
     def test_dashboard_charts_define_distinct_target_and_actual_colors(self) -> None:
