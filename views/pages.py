@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 from typing import Any
 
@@ -437,19 +438,38 @@ def render_knowledge_base() -> None:
         st.warning("ไม่พบเอกสารที่ตรงกับการค้นหา กรุณาลองใช้คำค้นหรือเลือกหมวดหมู่อื่น")
         return
 
-    header = st.columns([5, 2, 1.4, 1])
+    header = st.columns([4.2, 1.8, 1.2, 2.4])
     header[0].markdown("**ชื่อเอกสาร**")
     header[1].markdown("**หมวดหมู่**")
     header[2].markdown("**ขนาดไฟล์**")
     header[3].markdown("**ดำเนินการ**")
 
     for index, document in enumerate(matches):
-        row = st.columns([5, 2, 1.4, 1])
+        row = st.columns([4.2, 1.8, 1.2, 2.4])
         row[0].markdown(f"**{document.name}**")
         row[1].write(document.category)
         row[2].write(document.display_size)
-        if row[3].button("เปิดอ่าน", key=f"open_pdf_{document.path}", use_container_width=True):
-            st.session_state.selected_knowledge_document = str(document.path)
+        action_cols = row[3].columns(2)
+        document_path = Path(document.path)
+        if action_cols[0].button("เปิดอ่าน", key=f"open_pdf_{document_path.name}", use_container_width=True):
+            st.session_state.selected_knowledge_document = str(document_path)
+        try:
+            pdf_bytes = document_path.read_bytes()
+            action_cols[1].download_button(
+                "ดาวน์โหลด",
+                data=pdf_bytes,
+                file_name=document_path.name,
+                mime="application/pdf",
+                key=f"download_pdf_{document_path.name}",
+                use_container_width=True,
+            )
+        except OSError:
+            action_cols[1].button(
+                "ดาวน์โหลด",
+                key=f"download_unavailable_{document_path.name}",
+                disabled=True,
+                use_container_width=True,
+            )
         if index < len(matches) - 1:
             st.divider()
 
@@ -463,7 +483,35 @@ def render_knowledge_base() -> None:
             del st.session_state.selected_knowledge_document
             st.rerun()
         st.caption(f"{selected.category} | {selected.display_size}")
-        st.pdf(selected.path, height=760, key=f"pdf_viewer_{selected.path.name}")
+        selected_path = Path(selected.path)
+        try:
+            pdf_bytes = selected_path.read_bytes()
+        except OSError:
+            st.error("ไม่สามารถเปิดไฟล์ PDF นี้ได้ กรุณาตรวจสอบว่าไฟล์ยังอยู่ในโฟลเดอร์ knowledge/")
+            return
+        st.download_button(
+            "ดาวน์โหลดเอกสารนี้",
+            data=pdf_bytes,
+            file_name=selected_path.name,
+            mime="application/pdf",
+            key=f"download_selected_pdf_{selected_path.name}",
+        )
+        try:
+            st.pdf(pdf_bytes, height=760, key=f"pdf_viewer_{selected_path.name}")
+        except Exception:
+            encoded_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+            st.markdown(
+                f"""
+                <iframe
+                    src="data:application/pdf;base64,{encoded_pdf}"
+                    width="100%"
+                    height="760"
+                    style="border: 1px solid #D7DEE8; border-radius: 12px;"
+                    title="{selected.name}">
+                </iframe>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
