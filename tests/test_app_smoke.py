@@ -5,7 +5,11 @@ from streamlit.testing.v1 import AppTest
 
 from config import NAV_ITEMS
 from models import ActionItem, AppUser, MemberProfile, Team
-from services.auth_service import AUTH_USER_KEY, USER_STORE_KEY
+from services.auth_service import (
+    AUTH_USER_KEY,
+    USER_STORE_KEY,
+    recovery_params_from_query,
+)
 from services.coach_service import LocalCoachService
 from services.progress_service import member_progress_key
 from services.workplan_service import add_contact, create_default_workplan, replace_weekly_goals
@@ -58,6 +62,23 @@ def render_saved_action_plan() -> None:
 
 
 class AppSmokeTests(unittest.TestCase):
+    def test_recovery_query_parser_accepts_supabase_and_legacy_params(self) -> None:
+        self.assertEqual(
+            recovery_params_from_query(
+                {"type": "recovery", "access_token": "query-token"}
+            ),
+            ("recovery", "query-token"),
+        )
+        self.assertEqual(
+            recovery_params_from_query(
+                {
+                    "recovery_type": "recovery",
+                    "recovery_access_token": "legacy-token",
+                }
+            ),
+            ("recovery", "legacy-token"),
+        )
+
     def test_knowledge_base_import_and_navigation_contract(self) -> None:
         self.assertTrue(callable(render_knowledge_base))
         self.assertNotIn("คลังความรู้", NAV_ITEMS)

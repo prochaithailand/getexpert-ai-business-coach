@@ -72,13 +72,12 @@ def render_reset_password_page() -> None:
             st.session_state["recovery_token_used"] = access_token
             st.session_state["reset_password_saved"] = bool(new_password)
 
-    st.session_state.setdefault(
-        "password_recovery_access_token",
-        "recovery-token",
-    )
+    if not st.session_state.get("recovery_test_initialized"):
+        st.session_state["password_recovery_access_token"] = "recovery-token"
+        st.session_state["recovery_test_initialized"] = True
     render_reset_password(
         SessionUserStore(st.session_state, FakeSupabase()),
-        "recovery-token",
+        str(st.session_state.get("password_recovery_access_token", "")),
     )
 
 
@@ -134,7 +133,7 @@ class AuthUiTests(unittest.TestCase):
             "password_recovery_access_token",
             app.session_state,
         )
-        self.assertTrue(any("ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว" in item.value for item in app.success))
+        self.assertTrue(app.session_state["password_reset_completed"])
 
     def test_guest_cannot_access_change_password_page(self) -> None:
         app = AppTest.from_function(

@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 from models import AppUser, MemberProfile
 from services.auth_service import AUTH_USER_KEY, USER_STORE_KEY, SessionUserStore
+from services.supabase_service import SupabaseError
 
 
 class AuthServiceTests(unittest.TestCase):
@@ -180,6 +181,14 @@ class AuthServiceTests(unittest.TestCase):
             "recovery-token",
             "new-password",
         )
+
+        supabase.update_password.side_effect = SupabaseError("expired jwt")
+        with self.assertRaisesRegex(ValueError, "หมดอายุ"):
+            store.reset_password(
+                "expired-token",
+                "another-password",
+                "another-password",
+            )
 
     def test_local_leader_list_contains_only_leaders(self) -> None:
         state = {}

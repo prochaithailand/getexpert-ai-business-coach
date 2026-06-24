@@ -16,7 +16,7 @@ from config import (
     NAV_ITEMS,
 )
 from services.coach_service import LocalCoachService
-from services.auth_service import SessionUserStore
+from services.auth_service import SessionUserStore, recovery_params_from_query
 from services.knowledge_service import KnowledgeService
 from services.openai_coach_service import OpenAICoachService
 from services.profile_repository import SessionProfileRepository
@@ -71,14 +71,16 @@ def capture_supabase_recovery_redirect() -> None:
           if (type === "recovery" && accessToken) {
             const url = new URL(parentWindow.location.href);
             url.hash = "";
-            url.searchParams.set("recovery_type", "recovery");
-            url.searchParams.set("recovery_access_token", accessToken);
-            parentWindow.location.replace(url.toString());
+            url.searchParams.set("type", "recovery");
+            url.searchParams.set("access_token", accessToken);
+            parentWindow.history.replaceState({}, "", url.toString());
+            parentWindow.location.reload();
           } else if (errorDescription) {
             const url = new URL(parentWindow.location.href);
             url.hash = "";
             url.searchParams.set("recovery_error", errorDescription);
-            parentWindow.location.replace(url.toString());
+            parentWindow.history.replaceState({}, "", url.toString());
+            parentWindow.location.reload();
           }
         }
         </script>
@@ -462,12 +464,12 @@ authenticated_user = user_store.current_user()
 invite_code = str(st.query_params.get("invite_code", "")).strip()
 if invite_code:
     st.session_state["pending_invite_code"] = invite_code
-recovery_type = str(st.query_params.get("recovery_type", "")).strip()
-recovery_access_token = str(
-    st.query_params.get("recovery_access_token", "")
-).strip()
+recovery_type, recovery_access_token = recovery_params_from_query(st.query_params)
 if recovery_type == "recovery" and recovery_access_token:
     st.session_state["password_recovery_access_token"] = recovery_access_token
+    st.query_params.pop("type", None)
+    st.query_params.pop("access_token", None)
+    st.query_params.pop("refresh_token", None)
     st.query_params.pop("recovery_type", None)
     st.query_params.pop("recovery_access_token", None)
 recovery_error = str(st.query_params.get("recovery_error", "")).strip()
@@ -506,7 +508,9 @@ if authenticated_user is None:
     if recovery_message := st.session_state.pop("password_recovery_error", None):
         st.error("ลิงก์รีเซ็ตรหัสผ่านไม่ถูกต้องหรือหมดอายุ กรุณาขอลิงก์ใหม่")
     if st.session_state.pop("password_reset_completed", False):
-        st.success("ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว กรุณาเข้าสู่ระบบ")
+        st.success(
+            "ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่"
+        )
     if st.session_state.get("pending_invite_code"):
         st.info("กรุณาเข้าสู่ระบบหรือสมัครสมาชิกก่อนยืนยันคำเชิญเข้าร่วมทีม")
     if auth_page == "เข้าสู่ระบบ":

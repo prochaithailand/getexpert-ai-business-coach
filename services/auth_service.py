@@ -17,6 +17,18 @@ USER_STORE_KEY = "prototype_users"
 PBKDF2_ITERATIONS = 210_000
 
 
+def recovery_params_from_query(query_params: object) -> tuple[str, str]:
+    get_value = getattr(query_params, "get", lambda _key, _default="": "")
+    recovery_type = str(
+        get_value("type", "") or get_value("recovery_type", "")
+    ).strip()
+    access_token = str(
+        get_value("access_token", "")
+        or get_value("recovery_access_token", "")
+    ).strip()
+    return recovery_type, access_token
+
+
 class SessionUserStore:
     def __init__(self, state: Any, supabase: SupabaseService | None = None) -> None:
         self.state = state
@@ -150,7 +162,9 @@ class SessionUserStore:
             from services.supabase_service import SupabaseError
 
             if isinstance(error, SupabaseError):
-                raise ValueError(_password_error_message(str(error))) from error
+                raise ValueError(
+                    "ลิงก์รีเซ็ตรหัสผ่านหมดอายุ กรุณาขอลิงก์ใหม่อีกครั้ง"
+                ) from error
             raise
 
     def get(self, email: str) -> AppUser | None:

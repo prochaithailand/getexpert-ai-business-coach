@@ -111,7 +111,7 @@ def render_reset_password(
         return
     st.session_state.pop("password_recovery_access_token", None)
     st.session_state["password_reset_completed"] = True
-    st.success("ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่")
+    st.rerun()
 
 
 def render_logout(store: SessionUserStore, user: AppUser) -> None:
