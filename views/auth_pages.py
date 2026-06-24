@@ -60,20 +60,42 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
         return
     st.markdown("<p class='section-lead'>กำหนดสิทธิ์ผู้นำและผู้ดูแลระบบโดยผู้ดูแลระบบที่มีอยู่แล้ว</p>", unsafe_allow_html=True)
     for account in store.list_users():
-        role_label = {"Member": "สมาชิก", "Leader": "ผู้นำ", "Admin": "ผู้ดูแลระบบ"}[account.role]
+        role_label = {
+            "Member": "สมาชิก",
+            "Leader": "ผู้นำ",
+            "Partner": "Partner",
+            "Admin": "ผู้ดูแลระบบ",
+        }[account.role]
         with st.container(border=True):
-            details, action = st.columns([4, 1])
-            details.markdown(f"**{account.full_name}**  \n{account.email}  \nบทบาท: {role_label}")
-            if account.role != "Admin" and action.button(
-                "เลื่อนเป็นผู้นำ" if account.role == "Member" else "เลื่อนเป็นผู้ดูแลระบบ",
-                key=f"promote_{account.email}",
+            details, action = st.columns([3, 2])
+            rate = 15 if account.role == "Partner" else 8 if account.role == "Leader" else 0
+            badge = f"  \nReferral Rate: **{rate}%**" if rate else ""
+            details.markdown(
+                f"**{account.full_name}**  \n{account.email}  \nบทบาท: **{role_label}**{badge}"
+            )
+            role_options = ("Member", "Leader", "Partner", "Admin")
+            selected_role = action.selectbox(
+                "กำหนดบทบาท",
+                role_options,
+                index=role_options.index(account.role),
+                key=f"role_select_{account.email}",
+            )
+            if action.button(
+                "บันทึกบทบาท",
+                key=f"set_role_{account.email}",
                 width="stretch",
+                disabled=selected_role == account.role,
             ):
                 try:
-                    promoted = store.promote(user.email, account.email)
-                except (PermissionError, KeyError, ValueError) as error:
+                    updated = store.set_role(user.email, account.email, selected_role)
+                except (PermissionError, KeyError, ValueError, SupabaseError) as error:
                     st.warning(str(error))
                     return
-                promoted_label = "ผู้นำ" if promoted.role == "Leader" else "ผู้ดูแลระบบ"
-                st.success(f"ปรับบทบาทของ {promoted.full_name} เป็น{promoted_label}แล้ว")
+                updated_label = {
+                    "Member": "สมาชิก",
+                    "Leader": "ผู้นำ",
+                    "Partner": "Partner",
+                    "Admin": "ผู้ดูแลระบบ",
+                }[updated.role]
+                st.success(f"ปรับบทบาทของ {updated.full_name} เป็น {updated_label} แล้ว")
                 st.rerun()

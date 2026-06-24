@@ -35,6 +35,7 @@ class PermissionTests(unittest.TestCase):
         self.member = MemberProfile(name="สมาชิก", occupation="งาน", role="Member")
         self.leader = MemberProfile(name="ผู้นำ", occupation="งาน", role="Leader")
         self.admin = MemberProfile(name="ผู้ดูแล", occupation="งาน", role="Admin")
+        self.partner = MemberProfile(name="Partner", occupation="งาน", role="Partner")
 
     def test_member_cannot_see_or_access_restricted_team_pages(self) -> None:
         navigation = visible_navigation(NAV_ITEMS, self.member)
@@ -59,6 +60,14 @@ class PermissionTests(unittest.TestCase):
         self.assertIn("จัดการผู้ใช้", navigation)
         self.assertTrue(can_access_team_management(self.admin))
         self.assertTrue(can_access_team_dashboard(self.admin))
+
+    def test_partner_can_access_team_dashboard_but_not_admin_pages(self) -> None:
+        navigation = visible_navigation(NAV_ITEMS, self.partner)
+        self.assertIn("Team Dashboard", navigation)
+        self.assertNotIn("จัดการทีม", navigation)
+        self.assertNotIn("จัดการผู้ใช้", navigation)
+        self.assertTrue(can_access_team_dashboard(self.partner))
+        self.assertFalse(can_access_team_management(self.partner))
         self.assertEqual(UNAUTHORIZED_MESSAGE, "คุณไม่มีสิทธิ์เข้าถึงหน้านี้")
 
     def test_restricted_pages_show_required_thai_message_when_called_directly(self) -> None:

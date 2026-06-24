@@ -20,7 +20,7 @@ def build_team_dashboard(
     team_id: str | None = None,
 ) -> dict[str, Any] | None:
     selected_team_id = (team_id or (current_profile.team_id if current_profile else "")).strip().upper()
-    if current_profile and current_profile.role == "Leader":
+    if current_profile and current_profile.role in {"Leader", "Partner"}:
         leader_team_id = current_profile.team_id.strip().upper()
         if not leader_team_id or selected_team_id != leader_team_id:
             return None

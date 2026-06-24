@@ -46,18 +46,18 @@ def render_team_dashboard(
     dashboard_profile = profile
     if (
         authenticated_user
-        and authenticated_user.role == "Leader"
+        and authenticated_user.role in {"Leader", "Partner"}
         and selected_team_id
         and (not profile or not profile.team_id)
     ):
         assigned_team = SessionTeamRepository(st.session_state).get(selected_team_id)
         if assigned_team:
             dashboard_profile = replace(
-                profile or MemberProfile(name=authenticated_user.full_name, role="Leader"),
+                profile or MemberProfile(name=authenticated_user.full_name, role=authenticated_user.role),
                 team_name=assigned_team.name,
                 team_id=assigned_team.team_id,
                 team_leader=assigned_team.leader,
-                role="Leader",
+                role=authenticated_user.role,
             )
     snapshot = build_team_dashboard(st.session_state, dashboard_profile, selected_team_id)
     if snapshot is None:
@@ -79,7 +79,7 @@ def _select_team(
     if not authenticated_user or authenticated_user.role != "Admin":
         if profile and profile.team_id:
             return profile.team_id
-        if authenticated_user and authenticated_user.role == "Leader":
+        if authenticated_user and authenticated_user.role in {"Leader", "Partner"}:
             assigned = next(
                 (
                     team
@@ -122,13 +122,17 @@ def _render_invite_link(
     authenticated_user: AppUser | None,
     snapshot: dict[str, Any],
 ) -> None:
-    if not authenticated_user or authenticated_user.role != "Leader":
+    if not authenticated_user or authenticated_user.role not in {"Leader", "Partner", "Admin"}:
         return
     repository = SessionTeamRepository(st.session_state)
     team = repository.get(snapshot["team_id"])
     if not team:
         return
-    st.subheader("ลิงก์เชิญสมาชิกเข้าทีม")
+    st.subheader(
+        "Partner Link" if authenticated_user.role == "Partner"
+        else "จัดการลิงก์เชิญสมาชิก" if authenticated_user.role == "Admin"
+        else "ลิงก์เชิญสมาชิกเข้าทีม"
+    )
     if not team.invite_code:
         if st.button("สร้างลิงก์เชิญเข้าทีม", type="primary"):
             try:
@@ -166,6 +170,9 @@ def _render_invite_link(
         height=80,
     )
     st.caption(f"ลิงก์นี้สำหรับทีม {team.name} และสร้างโดย {authenticated_user.email}")
+    st.caption(
+        f"Referral Rate: {team.invite_referral_rate or (15 if authenticated_user.role == 'Partner' else 8):g}%"
+    )
 
 
 def render_team_invite_confirmation(
@@ -179,7 +186,11 @@ def render_team_invite_confirmation(
         authenticated = get_authenticated_supabase_user(st.session_state)
         if supabase and authenticated:
             try:
-                supabase.load_teams(st.session_state, authenticated)
+                supabase.load_invited_team(
+                    st.session_state,
+                    authenticated,
+                    invite_code,
+                )
             except SupabaseError:
                 st.warning("ยังไม่สามารถตรวจสอบคำเชิญได้ กรุณาลองใหม่อีกครั้ง")
                 return False
@@ -229,7 +240,12 @@ def _render_member_table(
     rows = [
         {
             "ชื่อสมาชิก": member["name"],
-            "บทบาท": {"Member": "สมาชิก", "Leader": "ผู้นำ", "Admin": "ผู้ดูแลระบบ"}.get(member["role"], member["role"]),
+            "บทบาท": {
+                "Member": "สมาชิก",
+                "Leader": "ผู้นำ",
+                "Partner": "Partner",
+                "Admin": "ผู้ดูแลระบบ",
+            }.get(member["role"], member["role"]),
             "คะแนน PP": member["pp"],
             "แผน 30 วัน": f"{member['progress']:.1f}%",
             "จำนวนผู้มุ่งหวัง": member["prospects"],
@@ -240,7 +256,7 @@ def _render_member_table(
         for member in snapshot["members"]
     ]
     st.dataframe(rows, hide_index=True, width="stretch")
-    if not authenticated_user or authenticated_user.role != "Leader":
+    if not authenticated_user or authenticated_user.role not in {"Leader", "Partner"}:
         return
     removable_members = [
         member

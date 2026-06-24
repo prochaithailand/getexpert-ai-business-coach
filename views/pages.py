@@ -156,7 +156,7 @@ def render_member_profile(repository: ProfileRepository) -> None:
     _page_header("โปรไฟล์สมาชิก", "ให้ข้อมูลพื้นฐานเพื่อช่วยให้ระบบวางแผนพัฒนาธุรกิจได้ตรงกับเป้าหมายของคุณ")
     authenticated = st.session_state.get("authenticated_user", {})
     raw_role = str(authenticated.get("role", "Member")).strip()
-    authenticated_role = raw_role if raw_role in {"Member", "Leader", "Admin"} else "Member"
+    authenticated_role = raw_role if raw_role in {"Member", "Leader", "Partner", "Admin"} else "Member"
     current = repository.get() or MemberProfile(
         name=str(authenticated.get("full_name", "")),
         role=authenticated_role,
@@ -176,12 +176,18 @@ def render_member_profile(repository: ProfileRepository) -> None:
             placeholder="ไม่บังคับ",
             help="ระบุชื่อผู้แนะนำได้ตามต้องการ",
         )
-        if authenticated_role == "Leader":
+        if authenticated_role in {"Leader", "Partner"}:
             st.markdown("**ข้อมูลทีมที่ได้รับมอบหมาย**")
             left.text_input("ชื่อทีม", value=current.team_name or "ยังไม่ได้รับมอบหมาย", disabled=True)
             right.text_input("รหัสทีม", value=current.team_id or "ยังไม่ได้รับมอบหมาย", disabled=True)
             left.text_input("หัวหน้าทีม", value=current.team_leader or "ยังไม่ได้รับมอบหมาย", disabled=True)
-            right.text_input("บทบาทในทีม", value="ผู้นำ", disabled=True)
+            right.text_input(
+                "บทบาทในทีม",
+                value="Partner" if authenticated_role == "Partner" else "ผู้นำ",
+                disabled=True,
+            )
+            if authenticated_role == "Partner":
+                st.caption("Referral Partner ที่ได้รับอนุมัติ | Referral Rate 15%")
             st.caption("ข้อมูลทีมกำหนดโดยผู้ดูแลระบบและไม่สามารถแก้ไขจากหน้าโปรไฟล์ได้")
         elif authenticated_role == "Admin":
             st.markdown("**การจัดการทีม**")
@@ -200,6 +206,15 @@ def render_member_profile(repository: ProfileRepository) -> None:
             team_leader=current.team_leader,
             sponsor=sponsor.strip(),
             role=authenticated_role,
+            invited_by=current.invited_by,
+            joined_at=current.joined_at,
+            referrer_user_id=current.referrer_user_id,
+            referrer_role_at_signup=current.referrer_role_at_signup,
+            referral_rate_at_signup=current.referral_rate_at_signup,
+            referral_source=current.referral_source,
+            partner_status=current.partner_status,
+            partner_approved_by=current.partner_approved_by,
+            partner_approved_at=current.partner_approved_at,
         )
         repository.save(profile)
         if profile.is_complete:

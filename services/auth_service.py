@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import re
 import secrets
+from datetime import datetime, timezone
 from typing import Any
 
 from models import AppUser, MemberProfile
@@ -170,6 +171,56 @@ class SessionUserStore:
         if target.email == actor.email:
             self.state[AUTH_USER_KEY] = promoted.public_dict()
         return promoted
+
+    def set_role(
+        self,
+        actor_email: str,
+        target_email: str,
+        next_role: str,
+    ) -> AppUser:
+        actor = self.get(actor_email)
+        if not actor or actor.role != "Admin":
+            raise PermissionError("คุณไม่มีสิทธิ์เปลี่ยนบทบาทผู้ใช้")
+        if next_role not in {"Member", "Leader", "Partner", "Admin"}:
+            raise ValueError("บทบาทไม่ถูกต้อง")
+        target = self.get(target_email)
+        if not target:
+            raise KeyError("ไม่พบบัญชีผู้ใช้")
+        authenticated = self.state.get(AUTH_USER_KEY, {})
+        if self.supabase and self.supabase.enabled:
+            token = str(authenticated.get("access_token", ""))
+            if not token:
+                raise PermissionError("กรุณาเข้าสู่ระบบใหม่ก่อนเปลี่ยนบทบาท")
+            self.supabase.promote_user(target.email, next_role, token)
+        updated = AppUser(target.email, target.full_name, next_role, target.password_hash)
+        users = dict(self.state.get(USER_STORE_KEY, {}))
+        users[target.email] = updated.to_dict()
+        self.state[USER_STORE_KEY] = users
+        user_profiles = dict(self.state.get("member_profiles_by_user", {}))
+        raw_profile = user_profiles.get(target.email)
+        if raw_profile:
+            profile = MemberProfile.from_dict(raw_profile)
+            approval_time = datetime.now(timezone.utc).isoformat()
+            updated_profile = MemberProfile.from_dict({
+                **profile.to_dict(),
+                "role": next_role,
+                "partner_status": "approved" if next_role == "Partner" else "",
+                "partner_approved_by": actor.email if next_role == "Partner" else "",
+                "partner_approved_at": approval_time if next_role == "Partner" else "",
+            })
+            user_profiles[target.email] = updated_profile.to_dict()
+            self.state["member_profiles_by_user"] = user_profiles
+            registry = dict(self.state.get("member_profiles_by_key", {}))
+            registry.pop(member_progress_key(profile), None)
+            registry[member_progress_key(updated_profile)] = updated_profile.to_dict()
+            self.state["member_profiles_by_key"] = registry
+            if self.supabase and self.supabase.enabled:
+                self.supabase.assign_user_to_team(
+                    authenticated, target.email, updated_profile, None
+                )
+        if target.email == actor.email:
+            self.state[AUTH_USER_KEY] = {**dict(authenticated), **updated.public_dict()}
+        return updated
 
     def create_admin_internally(self, email: str, password: str, full_name: str) -> AppUser:
         normalized_email = _normalize_email(email)

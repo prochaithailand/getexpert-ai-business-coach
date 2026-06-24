@@ -63,7 +63,7 @@ class ProfileRepositoryTests(unittest.TestCase):
         self.assertEqual(repository.get().role, "Admin")
 
     def test_member_and_leader_cannot_change_admin_assigned_team(self) -> None:
-        for role in ("Member", "Leader"):
+        for role in ("Member", "Leader", "Partner"):
             with self.subTest(role=role):
                 email = f"{role.casefold()}@example.com"
                 assigned = MemberProfile(

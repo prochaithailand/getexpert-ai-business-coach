@@ -89,9 +89,16 @@ class SessionTeamRepository:
                 team.notes,
                 user.email.casefold(),
                 team.invite_code,
+                team.invite_owner_role,
+                team.invite_referral_rate,
+                team.invite_owner_user_id,
             ),
         )
-        self._assign_user(updated_team, user, "Leader")
+        self._assign_user(
+            updated_team,
+            user,
+            "Partner" if user.role == "Partner" else "Leader",
+        )
         return updated_team
 
     def assign_members(self, team_id: str, users: list[AppUser]) -> list[MemberProfile]:
@@ -131,7 +138,7 @@ class SessionTeamRepository:
         if not team:
             raise KeyError("ไม่พบทีมที่ต้องการจัดการ")
         if (
-            leader.role != "Leader"
+            leader.role not in {"Leader", "Partner"}
             or not team.leader_email
             or team.leader_email.casefold() != leader.email.casefold()
         ):
@@ -182,7 +189,7 @@ class SessionTeamRepository:
             else MemberProfile.from_dict(raw_profile)
         )
         assigned_by_profile = _team_id(current_profile.team_id) == team.team_id
-        if leader.role not in {"Leader", "Admin"} or (
+        if leader.role not in {"Leader", "Partner", "Admin"} or (
             leader.role != "Admin"
             and (
             team.leader_email
@@ -197,12 +204,30 @@ class SessionTeamRepository:
         invite_code = team.invite_code or (
             secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:12].upper()
         )
+        owner_role = leader.role
+        if leader.role == "Admin":
+            owner_raw = self.state.get(USER_STORE_KEY, {}).get(
+                team.leader_email.casefold()
+            )
+            owner_role = (
+                AppUser.from_dict(owner_raw).role
+                if owner_raw
+                else team.invite_owner_role or "Leader"
+            )
+        owner_rate = referral_rate_for_role(owner_role)
         updated = replace(
             team,
             leader_email=team.leader_email or (
-                leader.email.casefold() if leader.role == "Leader" else ""
+                leader.email.casefold() if leader.role in {"Leader", "Partner"} else ""
             ),
             invite_code=invite_code,
+            invite_owner_role=owner_role,
+            invite_referral_rate=owner_rate,
+            invite_owner_user_id=(
+                str(self.state.get("authenticated_user", {}).get("user_id", ""))
+                if leader.role in {"Leader", "Partner"}
+                else team.invite_owner_user_id
+            ),
         )
         supabase = get_supabase_service(self.state)
         authenticated = get_authenticated_supabase_user(self.state)
@@ -213,6 +238,9 @@ class SessionTeamRepository:
                 authenticated,
                 team.team_id,
                 invite_code,
+                updated.invite_owner_role,
+                updated.invite_referral_rate,
+                updated.invite_owner_user_id,
             )
             if not saved:
                 raise RuntimeError("ไม่สามารถบันทึกลิงก์คำเชิญได้ กรุณาลองใหม่อีกครั้ง")
@@ -242,6 +270,17 @@ class SessionTeamRepository:
             sponsor=team.leader_email or assigned.sponsor,
             invited_by=team.leader_email,
             joined_at=datetime.now(timezone.utc).isoformat(),
+            referrer_user_id=team.invite_owner_user_id,
+            referrer_role_at_signup=team.invite_owner_role or "Leader",
+            referral_rate_at_signup=(
+                team.invite_referral_rate
+                or referral_rate_for_role(team.invite_owner_role or "Leader")
+            ),
+            referral_source=(
+                "partner_link"
+                if (team.invite_owner_role or "Leader") == "Partner"
+                else "leader_invite"
+            ),
             role="Member",
         )
         self._store_assigned_profile(user, joined, "Member")
@@ -398,6 +437,9 @@ def normalize_team(team: Team) -> Team:
         notes=team.notes.strip(),
         leader_email=team.leader_email.strip().casefold(),
         invite_code=team.invite_code.strip(),
+        invite_owner_role=team.invite_owner_role.strip(),
+        invite_referral_rate=float(team.invite_referral_rate or 0),
+        invite_owner_user_id=team.invite_owner_user_id.strip(),
     )
 
 
@@ -413,3 +455,7 @@ def can_manage_teams(profile: MemberProfile | None) -> bool:
 
 def _team_id(value: str) -> str:
     return value.strip().upper()
+
+
+def referral_rate_for_role(role: str) -> float:
+    return {"Leader": 8.0, "Partner": 15.0}.get(role, 0.0)

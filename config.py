@@ -26,5 +26,5 @@ EXPERIENCE_LEVELS = (
     "ระดับเชี่ยวชาญ (มากกว่า 3 ปี)",
 )
 
-TEAM_ROLES = ("Member", "Leader", "Admin")
+TEAM_ROLES = ("Member", "Leader", "Partner", "Admin")
 PROFILE_ROLE_OPTIONS = ("Member", "Leader")

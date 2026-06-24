@@ -136,6 +136,34 @@ class SupabaseService:
             for row in teams if row.get("team_id") and row.get("team_data")
         }
 
+    def load_invited_team(
+        self,
+        state: Any,
+        authenticated: dict[str, Any],
+        invite_code: str,
+    ) -> bool:
+        response = self.client.post(
+            f"{self.url}/rest/v1/rpc/getexpert_resolve_team_invite",
+            headers=self._headers(authenticated["access_token"]),
+            json={"requested_invite_code": invite_code},
+        )
+        self._raise_for_error(response)
+        payload = response.json()
+        if not payload:
+            return False
+        row = payload[0] if isinstance(payload, list) else payload
+        team_id = str(row.get("team_id", "")).strip().upper()
+        team_data = row.get("team_data", {})
+        if not team_id or not team_data:
+            return False
+        teams = dict(state.get("teams", {}))
+        teams[team_id] = Team.from_dict({
+            **team_data,
+            "team_id": team_id,
+        }).to_dict()
+        state["teams"] = teams
+        return True
+
     def load_user_data(self, state: Any, authenticated: dict[str, Any]) -> None:
         from services.workplan_service import create_default_workplan
 
@@ -155,7 +183,7 @@ class SupabaseService:
                     team
                     for team in team_objects.values()
                     if (
-                        str(authenticated.get("role", "")) == "Leader"
+                        str(authenticated.get("role", "")) in {"Leader", "Partner"}
                         and team.leader_email.casefold() == email
                     )
                 ),
@@ -190,7 +218,7 @@ class SupabaseService:
             canonical_team_id = str(row.get("team_id") or "").strip().upper()
             recovered_leader_team = (
                 row_email == email
-                and profile.role == "Leader"
+                and profile.role in {"Leader", "Partner"}
                 and not canonical_team_id
             )
             if recovered_leader_team:
@@ -300,11 +328,20 @@ class SupabaseService:
         authenticated: dict[str, Any],
         team_id: str,
         invite_code: str,
+        owner_role: str,
+        referral_rate: float,
+        owner_user_id: str,
     ) -> None:
         response = self.client.post(
             f"{self.url}/rest/v1/rpc/getexpert_set_team_invite",
             headers=self._headers(authenticated["access_token"]),
-            json={"target_team_id": team_id, "new_invite_code": invite_code},
+            json={
+                "target_team_id": team_id,
+                "new_invite_code": invite_code,
+                "invite_owner_role": owner_role,
+                "invite_referral_rate": referral_rate,
+                "invite_owner_user_id": owner_user_id,
+            },
         )
         self._raise_for_error(response)
 

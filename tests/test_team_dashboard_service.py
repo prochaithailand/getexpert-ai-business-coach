@@ -132,6 +132,28 @@ class TeamDashboardServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["team_id"], "TEAM-02")
         self.assertEqual([member["name"] for member in snapshot["members"]], ["สมาชิกต่างทีม"])
 
+    def test_partner_can_view_only_assigned_team(self) -> None:
+        partner = MemberProfile(
+            name="Partner",
+            occupation="พัฒนาตลาด",
+            team_name="ทีม Partner",
+            team_id="TEAM-01",
+            team_leader="Partner",
+            role="Partner",
+        )
+        state = {
+            "teams": {
+                "TEAM-01": Team("ทีม Partner", "TEAM-01", "Partner").to_dict(),
+                "TEAM-02": Team("ทีมอื่น", "TEAM-02", "ผู้นำอื่น").to_dict(),
+            }
+        }
+        profiles = SessionProfileRepository(state)
+        profiles.save(partner)
+        profiles.save(self.other_team)
+
+        self.assertIsNotNone(build_team_dashboard(state, partner, "TEAM-01"))
+        self.assertIsNone(build_team_dashboard(state, partner, "TEAM-02"))
+
     def test_dashboard_requires_complete_profile_with_team(self) -> None:
         self.assertIsNone(build_team_dashboard({}, None))
         self.assertIsNone(build_team_dashboard({}, MemberProfile(name="ไม่มีทีม", occupation="งาน")))

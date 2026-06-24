@@ -31,10 +31,15 @@ def render_team_management(
         st.warning(f"ไม่สามารถโหลดรายชื่อผู้ใช้จาก Supabase ได้: {error}")
         accounts = []
     try:
-        leader_accounts = store.list_users_by_role("Leader")
+        leader_accounts = [
+            *store.list_users_by_role("Leader"),
+            *store.list_users_by_role("Partner"),
+        ]
     except SupabaseError as error:
         st.warning(f"ไม่สามารถโหลดรายชื่อหัวหน้าทีมจาก Supabase ได้: {error}")
-        leader_accounts = [account for account in accounts if account.role == "Leader"]
+        leader_accounts = [
+            account for account in accounts if account.role in {"Leader", "Partner"}
+        ]
     if message := st.session_state.pop("team_flash_message", None):
         st.success(message)
 
@@ -143,6 +148,8 @@ def _render_edit_form(repository: SessionTeamRepository) -> None:
                 Team(
                     name, team_id, team.leader, primary_sponsor, notes,
                     team.leader_email, team.invite_code,
+                    team.invite_owner_role, team.invite_referral_rate,
+                    team.invite_owner_user_id,
                 ),
             )
         except (KeyError, ValueError) as error:

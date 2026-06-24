@@ -20,6 +20,13 @@ class MemberProfile:
     role: str = "Member"
     invited_by: str = ""
     joined_at: str = ""
+    referrer_user_id: str = ""
+    referrer_role_at_signup: str = ""
+    referral_rate_at_signup: float = 0.0
+    referral_source: str = ""
+    partner_status: str = ""
+    partner_approved_by: str = ""
+    partner_approved_at: str = ""
 
     @property
     def is_complete(self) -> bool:
@@ -43,6 +50,9 @@ class Team:
     notes: str = ""
     leader_email: str = ""
     invite_code: str = ""
+    invite_owner_role: str = ""
+    invite_referral_rate: float = 0.0
+    invite_owner_user_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -16,7 +16,7 @@ def can_access_team_management(subject: MemberProfile | AppUser | None) -> bool:
 
 
 def can_access_team_dashboard(subject: MemberProfile | AppUser | None) -> bool:
-    return bool(subject and subject.role in {"Leader", "Admin"})
+    return bool(subject and subject.role in {"Leader", "Partner", "Admin"})
 
 
 def visible_navigation(items: Sequence[str], subject: MemberProfile | AppUser | None) -> tuple[str, ...]:

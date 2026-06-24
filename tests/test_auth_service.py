@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from models import MemberProfile
+from models import AppUser, MemberProfile
 from services.auth_service import AUTH_USER_KEY, USER_STORE_KEY, SessionUserStore
 
 
@@ -77,6 +77,42 @@ class AuthServiceTests(unittest.TestCase):
         self.assertEqual(state["member_profiles_by_user"][member.email]["role"], "Leader")
         promoted_admin = store.promote(admin.email, member.email)
         self.assertEqual(promoted_admin.role, "Admin")
+
+    def test_only_admin_can_assign_and_remove_partner_role(self) -> None:
+        admin = AppUser("admin@example.com", "ผู้ดูแล", "Admin", "hash")
+        leader = AppUser("leader@example.com", "ผู้นำ", "Leader", "hash")
+        member = AppUser("member@example.com", "สมาชิก", "Member", "hash")
+        state = {
+            USER_STORE_KEY: {
+                admin.email: admin.to_dict(),
+                leader.email: leader.to_dict(),
+                member.email: member.to_dict(),
+            },
+            "member_profiles_by_user": {
+                member.email: MemberProfile(
+                    name=member.full_name, occupation="งาน", role="Member"
+                ).to_dict(),
+            },
+        }
+        store = SessionUserStore(state)
+
+        with self.assertRaises(PermissionError):
+            store.set_role(member.email, member.email, "Partner")
+        with self.assertRaises(PermissionError):
+            store.set_role(leader.email, leader.email, "Partner")
+
+        partner = store.set_role(admin.email, member.email, "Partner")
+        self.assertEqual(partner.role, "Partner")
+        self.assertEqual(
+            state["member_profiles_by_user"][member.email]["partner_status"],
+            "approved",
+        )
+        restored = store.set_role(admin.email, member.email, "Leader")
+        self.assertEqual(restored.role, "Leader")
+        self.assertEqual(
+            state["member_profiles_by_user"][member.email]["partner_status"],
+            "",
+        )
 
     def test_local_leader_list_contains_only_leaders(self) -> None:
         state = {}

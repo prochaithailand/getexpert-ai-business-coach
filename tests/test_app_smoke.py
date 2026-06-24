@@ -60,7 +60,7 @@ def render_saved_action_plan() -> None:
 class AppSmokeTests(unittest.TestCase):
     def test_knowledge_base_import_and_navigation_contract(self) -> None:
         self.assertTrue(callable(render_knowledge_base))
-        self.assertIn("คลังความรู้", NAV_ITEMS)
+        self.assertNotIn("คลังความรู้", NAV_ITEMS)
 
     def test_home_onboarding_renders_all_ctas_and_navigates(self) -> None:
         app = _authenticate_app(AppTest.from_file("app.py", default_timeout=10).run())
@@ -100,19 +100,13 @@ class AppSmokeTests(unittest.TestCase):
             "เครื่องมือสร้างคอนเทนต์",
             "ผู้มุ่งหวัง",
             "Workplan ธุรกิจ",
-            "คลังความรู้",
-            "โค้ช AI",
+            "ถามคำถาม AI",
         ):
             app.radio[0].set_value(page).run()
             self.assertFalse(app.exception, f"{page} failed to render")
             self.assertTrue(all(button.label.strip() for button in app.button), f"{page} contains an unlabeled button")
 
-        sample_pdf = Path("knowledge/ebook_health_supplement_storytelling_formulas.pdf").resolve()
-        app.session_state["selected_knowledge_document"] = str(sample_pdf)
-        app.radio[0].set_value("คลังความรู้").run()
-        self.assertFalse(app.exception, "Knowledge Base PDF viewer failed to render")
-
-        app.radio[0].set_value("โค้ช AI").run()
+        app.radio[0].set_value("ถามคำถาม AI").run()
         missing_key_message = "ยังไม่ได้ตั้งค่า OPENAI_API_KEY ระบบจึงใช้โหมดค้นหาพื้นฐาน"
         warning_values = [alert.value for alert in app.warning]
         success_values = [alert.value for alert in app.success]

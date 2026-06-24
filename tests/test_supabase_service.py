@@ -27,6 +27,9 @@ class SupabaseServiceTests(unittest.TestCase):
             {"access_token": "access-token"},
             "TEAM-01",
             "INVITE123",
+            "Leader",
+            8,
+            "leader-user-id",
         )
 
         self.assertEqual(
@@ -35,7 +38,9 @@ class SupabaseServiceTests(unittest.TestCase):
         )
         self.assertEqual(
             requests[0].read().decode(),
-            '{"target_team_id":"TEAM-01","new_invite_code":"INVITE123"}',
+            '{"target_team_id":"TEAM-01","new_invite_code":"INVITE123",'
+            '"invite_owner_role":"Leader","invite_referral_rate":8,'
+            '"invite_owner_user_id":"leader-user-id"}',
         )
 
     def test_remove_team_member_uses_restricted_rpc(self) -> None:

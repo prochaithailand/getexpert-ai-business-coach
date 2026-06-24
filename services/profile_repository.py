@@ -45,9 +45,9 @@ class SessionProfileRepository:
     def save(self, profile: MemberProfile) -> None:
         current = self.get()
         authenticated_role = str(self._state.get("authenticated_user", {}).get("role", ""))
-        if authenticated_role in {"Member", "Leader", "Admin"}:
+        if authenticated_role in {"Member", "Leader", "Partner", "Admin"}:
             profile = replace(profile, role=authenticated_role)
-            if authenticated_role in {"Member", "Leader"}:
+            if authenticated_role in {"Member", "Leader", "Partner"}:
                 profile = replace(
                     profile,
                     team_name=current.team_name if current else "",
@@ -56,7 +56,7 @@ class SessionProfileRepository:
                 )
         elif profile.role == "Admin" and (not current or current.role != "Admin"):
             profile = replace(profile, role="Member")
-        elif profile.role not in {"Member", "Leader", "Admin"}:
+        elif profile.role not in {"Member", "Leader", "Partner", "Admin"}:
             profile = replace(profile, role="Member")
         self._persist(profile)
 

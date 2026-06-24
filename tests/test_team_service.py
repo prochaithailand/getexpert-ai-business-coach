@@ -2,7 +2,12 @@ import unittest
 
 from models import AppUser, MemberProfile, Team
 from services.auth_service import USER_STORE_KEY
-from services.team_service import SessionTeamRepository, can_manage_teams, resolve_profile_team
+from services.team_service import (
+    SessionTeamRepository,
+    can_manage_teams,
+    referral_rate_for_role,
+    resolve_profile_team,
+)
 
 
 class TeamServiceTests(unittest.TestCase):
@@ -127,8 +132,53 @@ class TeamServiceTests(unittest.TestCase):
         self.assertEqual(joined.team_id, "TEAM-INVITE")
         self.assertEqual(joined.role, "Member")
         self.assertEqual(joined.invited_by, leader.email)
+        self.assertEqual(joined.referrer_role_at_signup, "Leader")
+        self.assertEqual(joined.referral_rate_at_signup, 8)
+        self.assertEqual(joined.referral_source, "leader_invite")
         self.assertTrue(joined.joined_at)
         self.assertEqual(state[USER_STORE_KEY][member.email]["role"], "Member")
+
+    def test_partner_invite_snapshots_fifteen_percent_referral(self) -> None:
+        partner = AppUser("partner@example.com", "Partner หลัก", "Partner")
+        member = AppUser("member@example.com", "สมาชิกใหม่", "Member")
+        state = {
+            "authenticated_user": {
+                **partner.public_dict(),
+                "user_id": "partner-user-id",
+            },
+            USER_STORE_KEY: {
+                partner.email: partner.to_dict(),
+                member.email: member.to_dict(),
+            },
+            "member_profile": MemberProfile(
+                name=partner.full_name,
+                occupation="Partner",
+                team_id="TEAM-PARTNER",
+                role="Partner",
+            ).to_dict(),
+            "teams": {
+                "TEAM-PARTNER": Team(
+                    "ทีม Partner",
+                    "TEAM-PARTNER",
+                    partner.full_name,
+                    leader_email=partner.email,
+                ).to_dict(),
+            },
+        }
+        repository = SessionTeamRepository(state)
+
+        team = repository.generate_invite_code("TEAM-PARTNER", partner)
+        joined = repository.join_with_invite(team.invite_code, member)
+
+        self.assertEqual(team.invite_owner_role, "Partner")
+        self.assertEqual(team.invite_referral_rate, 15)
+        self.assertEqual(joined.referrer_user_id, "partner-user-id")
+        self.assertEqual(joined.referrer_role_at_signup, "Partner")
+        self.assertEqual(joined.referral_rate_at_signup, 15)
+        self.assertEqual(joined.referral_source, "partner_link")
+        self.assertEqual(referral_rate_for_role("Leader"), 8)
+        self.assertEqual(referral_rate_for_role("Partner"), 15)
+        self.assertEqual(referral_rate_for_role("Member"), 0)
 
     def test_member_cannot_be_assigned_to_a_different_team(self) -> None:
         member = AppUser("member@example.com", "สมาชิกทีมเดิม", "Member")
