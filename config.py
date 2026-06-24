@@ -8,6 +8,7 @@ DEFAULT_PASSWORD_RESET_REDIRECT_URL = "https://getexpert-ai.streamlit.app"
 NAV_ITEMS = (
     "หน้าแรก",
     "โปรไฟล์สมาชิก",
+    "ชำระเงิน / เปิดใช้งาน",
     "จัดการทีม",
     "จัดการผู้ใช้",
     "Team Dashboard",

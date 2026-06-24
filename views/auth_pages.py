@@ -180,7 +180,11 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
             rate = 15 if account.role == "Partner" else 8 if account.role == "Leader" else 0
             details.markdown(
                 f"**{account.full_name}**  \n{account.email}  \n"
-                f"บทบาท: **{role_label}**  \nReferral Rate: **{rate}%**"
+                f"บทบาท: **{role_label}**  \nReferral Rate: **{rate}%**  \n"
+                f"Subscription: **{account.subscription_status} / {account.subscription_plan}**  \n"
+                f"หมดอายุ: **{account.subscription_expires_at[:10] or '-'}**  \n"
+                f"อนุมัติโดย: **{account.approved_by or '-'}**  \n"
+                f"อนุมัติเมื่อ: **{account.approved_at[:10] or '-'}**"
             )
             for label, target_role in _role_actions_for(account, user):
                 if action.button(
@@ -191,6 +195,19 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
                 ):
                     _apply_role_change(store, user, account, target_role)
                     return
+            for label, action_name in _subscription_actions_for(account):
+                if action.button(
+                    label,
+                    key=f"subscription_{action_name}_{account.email}",
+                    width="stretch",
+                ):
+                    try:
+                        store.update_subscription(user.email, account.email, action_name)
+                    except (PermissionError, KeyError, ValueError, SupabaseError) as error:
+                        st.warning(str(error))
+                        return
+                    st.success(f"อัปเดตสถานะการใช้งานของ {account.full_name} แล้ว")
+                    st.rerun()
 
 
 def _role_actions_for(
@@ -220,6 +237,17 @@ def _role_actions_for(
             ("ลดสิทธิ์เป็นสมาชิก", "Member"),
         )
     return ()
+
+
+def _subscription_actions_for(account: AppUser) -> tuple[tuple[str, str], ...]:
+    if account.role == "Admin":
+        return ()
+    return (
+        ("อนุมัติใช้งาน 30 วัน", "approve"),
+        ("ต่ออายุ 30 วัน", "renew"),
+        ("ระงับการใช้งาน", "suspend"),
+        ("ตั้งเป็นรอชำระเงิน", "pending"),
+    )
 
 
 def _apply_role_change(

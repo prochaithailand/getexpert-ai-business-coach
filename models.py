@@ -69,6 +69,13 @@ class AppUser:
     full_name: str
     role: str = "Member"
     password_hash: str = ""
+    subscription_status: str = "active"
+    subscription_plan: str = "Member"
+    subscription_started_at: str = ""
+    subscription_expires_at: str = ""
+    last_payment_at: str = ""
+    approved_by: str = ""
+    approved_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -79,7 +86,10 @@ class AppUser:
         return cls(**{key: value for key, value in data.items() if key in allowed})
 
     def public_dict(self) -> dict[str, str]:
-        return {"email": self.email, "full_name": self.full_name, "role": self.role}
+        return {
+            key: value for key, value in self.to_dict().items()
+            if key != "password_hash"
+        }
 
 
 @dataclass(frozen=True)

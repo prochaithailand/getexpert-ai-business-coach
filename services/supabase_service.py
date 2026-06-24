@@ -73,6 +73,13 @@ class SupabaseService:
             "email": email.casefold(),
             "full_name": role_row.get("full_name") or auth_user.get("user_metadata", {}).get("full_name") or email,
             "role": role_row.get("role", "Member"),
+            "subscription_status": role_row.get("subscription_status") or "active",
+            "subscription_plan": role_row.get("subscription_plan") or "Member",
+            "subscription_started_at": role_row.get("subscription_started_at") or "",
+            "subscription_expires_at": role_row.get("subscription_expires_at") or "",
+            "last_payment_at": role_row.get("last_payment_at") or "",
+            "approved_by": role_row.get("approved_by") or "",
+            "approved_at": role_row.get("approved_at") or "",
             "user_id": auth_user.get("id", ""),
             "access_token": token,
             "refresh_token": payload.get("refresh_token", ""),
@@ -109,6 +116,25 @@ class SupabaseService:
         response = self._request(
             "PATCH", "users", params={"email": f"eq.{target_email.casefold()}"},
             json={"role": next_role, "updated_at": _now()}, access_token=access_token,
+        )
+        self._raise_for_error(response)
+
+    def update_user_subscription(
+        self, target_email: str, user: AppUser, access_token: str
+    ) -> None:
+        response = self._request(
+            "PATCH", "users", params={"email": f"eq.{target_email.casefold()}"},
+            json={
+                "subscription_status": user.subscription_status,
+                "subscription_plan": user.subscription_plan,
+                "subscription_started_at": user.subscription_started_at or None,
+                "subscription_expires_at": user.subscription_expires_at or None,
+                "last_payment_at": user.last_payment_at or None,
+                "approved_by": user.approved_by or None,
+                "approved_at": user.approved_at or None,
+                "updated_at": _now(),
+            },
+            access_token=access_token,
         )
         self._raise_for_error(response)
 

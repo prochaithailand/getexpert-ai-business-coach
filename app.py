@@ -21,6 +21,7 @@ from services.knowledge_service import KnowledgeService
 from services.openai_coach_service import OpenAICoachService
 from services.profile_repository import SessionProfileRepository
 from services.permissions import visible_navigation
+from services.subscription_service import LOCKED_MESSAGE, has_active_subscription
 from services.supabase_service import SupabaseService
 from services.settings_service import load_supabase_config
 from ui.styles import apply_global_styles
@@ -46,6 +47,7 @@ from views.auth_pages import (
     render_reset_password,
     render_user_management,
 )
+from views.payment_page import render_payment_page
 
 
 st.set_page_config(
@@ -552,7 +554,14 @@ with st.sidebar:
     )
     navigation_items = visible_navigation(NAV_ITEMS, authenticated_user)
     if st.session_state.get("main_navigation") not in navigation_items:
-        st.session_state["main_navigation"] = navigation_items[0]
+        st.session_state["main_navigation"] = (
+            "ชำระเงิน / เปิดใช้งาน"
+            if (
+                not has_active_subscription(authenticated_user)
+                and "ชำระเงิน / เปิดใช้งาน" in navigation_items
+            )
+            else navigation_items[0]
+        )
     page = st.radio(
         "เมนูหลัก",
         navigation_items,
@@ -565,6 +574,10 @@ with st.sidebar:
     st.markdown("<div class='sidebar-spacer'></div>", unsafe_allow_html=True)
 
 render_mobile_menu_toggle()
+
+if not has_active_subscription(authenticated_user):
+    if page != "ชำระเงิน / เปิดใช้งาน":
+        st.warning(LOCKED_MESSAGE)
 
 if should_collapse_sidebar:
     components.html(
@@ -590,6 +603,8 @@ if page == "หน้าแรก":
     render_home(profile)
 elif page == "โปรไฟล์สมาชิก":
     render_member_profile(repository)
+elif page == "ชำระเงิน / เปิดใช้งาน":
+    render_payment_page(authenticated_user)
 elif page == "จัดการทีม":
     render_team_management(repository.get(), authenticated_user, user_store)
 elif page == "จัดการผู้ใช้":

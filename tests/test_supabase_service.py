@@ -2,7 +2,7 @@ import unittest
 
 import httpx
 
-from models import ActionItem, MemberProfile, Team
+from models import ActionItem, AppUser, MemberProfile, Team
 from services.auth_service import SessionUserStore
 from services.progress_service import member_progress_key
 from services.supabase_service import SupabaseService
@@ -10,6 +10,25 @@ from services.workplan_service import add_contact, create_default_workplan, repl
 
 
 class SupabaseServiceTests(unittest.TestCase):
+    def test_admin_subscription_update_writes_only_subscription_columns(self) -> None:
+        requests = []
+        service = SupabaseService(
+            "https://project.supabase.co", "anon-key",
+            httpx.Client(transport=httpx.MockTransport(
+                lambda request: requests.append(request) or httpx.Response(204)
+            )),
+        )
+        user = AppUser(
+            "member@example.com", "สมาชิก",
+            subscription_status="active",
+            subscription_plan="Member",
+            subscription_expires_at="2026-07-24T00:00:00+00:00",
+        )
+        service.update_user_subscription(user.email, user, "admin-token")
+        self.assertEqual(requests[0].method, "PATCH")
+        self.assertIn("subscription_status", requests[0].read().decode())
+        self.assertNotIn("password", requests[0].read().decode())
+
     def test_request_password_reset_uses_supabase_recover_and_redirect_url(self) -> None:
         requests = []
 

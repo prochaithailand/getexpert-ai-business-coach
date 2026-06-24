@@ -4,12 +4,14 @@ import hashlib
 import hmac
 import re
 import secrets
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
 from models import AppUser, MemberProfile
 from services.progress_service import member_progress_key
 from services.supabase_service import SupabaseService
+from services.subscription_service import apply_subscription_action, effective_subscription_status
 
 
 AUTH_USER_KEY = "authenticated_user"
@@ -48,7 +50,10 @@ class SessionUserStore:
         if self.supabase and self.supabase.enabled:
             payload = self.supabase.sign_up(normalized_email, password, full_name.strip())
             auth_user = payload.get("user", {})
-            user = AppUser(normalized_email, full_name.strip(), "Member", "")
+            user = AppUser(
+                normalized_email, full_name.strip(), "Member", "",
+                subscription_status="pending_payment", subscription_plan="Member",
+            )
             users = dict(self.state.get(USER_STORE_KEY, {}))
             users[normalized_email] = user.to_dict()
             self.state[USER_STORE_KEY] = users
@@ -69,6 +74,8 @@ class SessionUserStore:
             full_name=full_name.strip(),
             role="Member",
             password_hash=_hash_password(password),
+            subscription_status="pending_payment",
+            subscription_plan="Member",
         )
         users[normalized_email] = user.to_dict()
         self.state[USER_STORE_KEY] = users
@@ -77,9 +84,7 @@ class SessionUserStore:
     def authenticate(self, email: str, password: str) -> AppUser | None:
         if self.supabase and self.supabase.enabled:
             authenticated = self.supabase.sign_in(_normalize_email(email), password)
-            user = AppUser(
-                authenticated["email"], authenticated["full_name"], authenticated["role"], ""
-            )
+            user = AppUser.from_dict(authenticated)
             users = dict(self.state.get(USER_STORE_KEY, {}))
             users[user.email] = user.to_dict()
             self.state[USER_STORE_KEY] = users
@@ -101,6 +106,13 @@ class SessionUserStore:
             self.logout()
             return None
         self.state[AUTH_USER_KEY] = {**dict(authenticated), **user.public_dict()}
+        status = effective_subscription_status(user)
+        if status != user.subscription_status:
+            user = AppUser.from_dict({**user.to_dict(), "subscription_status": status})
+            users = dict(self.state.get(USER_STORE_KEY, {}))
+            users[user.email] = user.to_dict()
+            self.state[USER_STORE_KEY] = users
+            self.state[AUTH_USER_KEY] = {**dict(authenticated), **user.public_dict()}
         return user
 
     def logout(self) -> None:
@@ -176,7 +188,7 @@ class SessionUserStore:
         if self.supabase and self.supabase.enabled and authenticated.get("access_token"):
             rows = self.supabase.list_users(authenticated["access_token"])
             users = [
-                AppUser(str(row["email"]), str(row.get("full_name", "")), str(row.get("role", "Member")))
+                AppUser.from_dict(row)
                 for row in rows
             ]
             cache = dict(self.state.get(USER_STORE_KEY, {}))
@@ -193,11 +205,7 @@ class SessionUserStore:
         if self.supabase and self.supabase.enabled and authenticated.get("access_token"):
             rows = self.supabase.list_users_by_role(role, authenticated["access_token"])
             users = [
-                AppUser(
-                    str(row["email"]),
-                    str(row.get("full_name", "")),
-                    str(row.get("role", "Member")),
-                )
+                AppUser.from_dict(row)
                 for row in rows
             ]
             cache = dict(self.state.get(USER_STORE_KEY, {}))
@@ -222,7 +230,7 @@ class SessionUserStore:
             if not token:
                 raise PermissionError("กรุณาเข้าสู่ระบบใหม่ก่อนเปลี่ยนบทบาท")
             self.supabase.promote_user(target.email, next_role, token)
-        promoted = AppUser(target.email, target.full_name, next_role, target.password_hash)
+        promoted = replace(target, role=next_role)
         users = dict(self.state.get(USER_STORE_KEY, {}))
         users[target.email] = promoted.to_dict()
         self.state[USER_STORE_KEY] = users
@@ -257,12 +265,22 @@ class SessionUserStore:
         if target.email == actor.email and target.role == "Admin" and next_role != "Admin":
             raise PermissionError("ผู้ดูแลระบบไม่สามารถลดสิทธิ์บัญชีของตนเองได้")
         authenticated = self.state.get(AUTH_USER_KEY, {})
+        updated = replace(
+            target,
+            role=next_role,
+            subscription_plan=(
+                "Leader" if next_role in {"Leader", "Partner"} else target.subscription_plan
+            ),
+        )
+        if next_role == "Leader":
+            updated = apply_subscription_action(updated, "approve", actor.email)
         if self.supabase and self.supabase.enabled:
             token = str(authenticated.get("access_token", ""))
             if not token:
                 raise PermissionError("กรุณาเข้าสู่ระบบใหม่ก่อนเปลี่ยนบทบาท")
             self.supabase.promote_user(target.email, next_role, token)
-        updated = AppUser(target.email, target.full_name, next_role, target.password_hash)
+            if next_role in {"Leader", "Partner"}:
+                self.supabase.update_user_subscription(target.email, updated, token)
         users = dict(self.state.get(USER_STORE_KEY, {}))
         users[target.email] = updated.to_dict()
         self.state[USER_STORE_KEY] = users
@@ -290,6 +308,27 @@ class SessionUserStore:
                 )
         if target.email == actor.email:
             self.state[AUTH_USER_KEY] = {**dict(authenticated), **updated.public_dict()}
+        return updated
+
+    def update_subscription(
+        self, actor_email: str, target_email: str, action: str
+    ) -> AppUser:
+        actor = self.get(actor_email)
+        target = self.get(target_email)
+        if not actor or actor.role != "Admin":
+            raise PermissionError("คุณไม่มีสิทธิ์จัดการการสมัครใช้งาน")
+        if not target:
+            raise KeyError("ไม่พบบัญชีผู้ใช้")
+        updated = apply_subscription_action(target, action, actor.email)
+        authenticated = self.state.get(AUTH_USER_KEY, {})
+        if self.supabase and self.supabase.enabled:
+            token = str(authenticated.get("access_token", ""))
+            if not token:
+                raise PermissionError("กรุณาเข้าสู่ระบบใหม่")
+            self.supabase.update_user_subscription(target.email, updated, token)
+        users = dict(self.state.get(USER_STORE_KEY, {}))
+        users[target.email] = updated.to_dict()
+        self.state[USER_STORE_KEY] = users
         return updated
 
     def create_admin_internally(self, email: str, password: str, full_name: str) -> AppUser:
