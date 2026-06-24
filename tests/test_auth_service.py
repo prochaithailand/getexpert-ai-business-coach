@@ -123,6 +123,25 @@ class AuthServiceTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             store.set_role(admin.email, admin.email, "Member")
 
+    def test_change_password_validates_login_length_and_confirmation(self) -> None:
+        supabase = Mock()
+        supabase.enabled = True
+        store = SessionUserStore({}, supabase)
+
+        with self.assertRaises(PermissionError):
+            store.change_password("new-password", "new-password")
+
+        store.state[AUTH_USER_KEY] = {"access_token": "access-token"}
+        with self.assertRaisesRegex(ValueError, "อย่างน้อย 8"):
+            store.change_password("short", "short")
+        with self.assertRaisesRegex(ValueError, "ไม่ตรงกัน"):
+            store.change_password("new-password", "different-password")
+
+        store.change_password("new-password", "new-password")
+        supabase.update_password.assert_called_once_with(
+            "access-token", "new-password"
+        )
+
     def test_local_leader_list_contains_only_leaders(self) -> None:
         state = {}
         store = SessionUserStore(state)

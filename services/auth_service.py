@@ -99,6 +99,30 @@ class SessionUserStore:
         ):
             self.state.pop(key, None)
 
+    def change_password(self, new_password: str, confirm_password: str) -> None:
+        if not new_password:
+            raise ValueError("กรุณากรอกรหัสผ่านใหม่")
+        if len(new_password) < 8:
+            raise ValueError("รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร")
+        if new_password != confirm_password:
+            raise ValueError("รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน")
+        authenticated = self.state.get(AUTH_USER_KEY, {})
+        if not authenticated:
+            raise PermissionError("กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน")
+        if not self.supabase or not self.supabase.enabled:
+            raise RuntimeError("การเปลี่ยนรหัสผ่านใช้งานได้เมื่อเชื่อมต่อ Supabase เท่านั้น")
+        access_token = str(authenticated.get("access_token", ""))
+        if not access_token:
+            raise PermissionError("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่")
+        try:
+            self.supabase.update_password(access_token, new_password)
+        except Exception as error:
+            from services.supabase_service import SupabaseError
+
+            if isinstance(error, SupabaseError):
+                raise ValueError(_password_error_message(str(error))) from error
+            raise
+
     def get(self, email: str) -> AppUser | None:
         raw = self.state.get(USER_STORE_KEY, {}).get(_normalize_email(email))
         return AppUser.from_dict(raw) if raw else None
@@ -267,3 +291,14 @@ def _verify_password(password: str, encoded: str) -> bool:
         return hmac.compare_digest(actual.hex(), digest_hex)
     except (TypeError, ValueError):
         return False
+
+
+def _password_error_message(message: str) -> str:
+    normalized = message.casefold()
+    if "same password" in normalized or "different from the old password" in normalized:
+        return "รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม"
+    if "weak" in normalized or "least" in normalized or "characters" in normalized:
+        return "รหัสผ่านใหม่ไม่ผ่านเงื่อนไขความปลอดภัย"
+    if "jwt" in normalized or "session" in normalized or "token" in normalized:
+        return "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่"
+    return "ไม่สามารถเปลี่ยนรหัสผ่านได้ กรุณาลองใหม่อีกครั้ง"

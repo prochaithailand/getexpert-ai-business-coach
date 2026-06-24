@@ -30,7 +30,13 @@ from views.dashboard_page import render_member_dashboard
 from views.prospect_page import render_prospect_manager
 from views.team_page import render_team_management
 from views.team_dashboard_page import render_team_dashboard, render_team_invite_confirmation
-from views.auth_pages import render_login, render_logout, render_register, render_user_management
+from views.auth_pages import (
+    render_account_settings,
+    render_login,
+    render_logout,
+    render_register,
+    render_user_management,
+)
 
 
 st.set_page_config(
@@ -519,6 +525,8 @@ elif page == "Workplan ธุรกิจ":
     render_business_workplan(repository.get())
 elif page == "คลังความรู้":
     render_knowledge_base()
+elif page == "ตั้งค่าบัญชี":
+    render_account_settings(user_store, authenticated_user)
 elif page == "ออกจากระบบ":
     render_logout(user_store, authenticated_user)
 else:

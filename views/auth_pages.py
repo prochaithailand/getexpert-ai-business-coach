@@ -53,6 +53,42 @@ def render_logout(store: SessionUserStore, user: AppUser) -> None:
         st.rerun()
 
 
+def render_account_settings(store: SessionUserStore, user: AppUser | None) -> None:
+    st.title("ตั้งค่าบัญชี")
+    if user is None:
+        st.warning("กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน")
+        return
+    st.markdown(
+        "<p class='section-lead'>จัดการความปลอดภัยสำหรับบัญชีของคุณ</p>",
+        unsafe_allow_html=True,
+    )
+    st.subheader("เปลี่ยนรหัสผ่าน")
+    st.caption(f"บัญชี: {user.email}")
+    with st.form("change_password_form", clear_on_submit=True):
+        new_password = st.text_input(
+            "รหัสผ่านใหม่",
+            type="password",
+            help="รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
+        )
+        confirm_password = st.text_input(
+            "ยืนยันรหัสผ่านใหม่",
+            type="password",
+        )
+        submitted = st.form_submit_button(
+            "บันทึกรหัสผ่านใหม่",
+            type="primary",
+            width="stretch",
+        )
+    if not submitted:
+        return
+    try:
+        store.change_password(new_password, confirm_password)
+    except (PermissionError, RuntimeError, ValueError) as error:
+        st.error(str(error))
+        return
+    st.success("เปลี่ยนรหัสผ่านเรียบร้อยแล้ว")
+
+
 def render_user_management(store: SessionUserStore, user: AppUser) -> None:
     st.title("จัดการผู้ใช้")
     if user.role != "Admin":

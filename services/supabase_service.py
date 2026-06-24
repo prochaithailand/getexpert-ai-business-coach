@@ -78,6 +78,14 @@ class SupabaseService:
             "refresh_token": payload.get("refresh_token", ""),
         }
 
+    def update_password(self, access_token: str, new_password: str) -> None:
+        response = self.client.put(
+            f"{self.url}/auth/v1/user",
+            headers=self._headers(access_token),
+            json={"password": new_password},
+        )
+        self._raise_for_error(response)
+
     def list_users(self, access_token: str) -> list[dict[str, Any]]:
         return self.select("users", {}, access_token)
 

@@ -10,6 +10,29 @@ from services.workplan_service import add_contact, create_default_workplan, repl
 
 
 class SupabaseServiceTests(unittest.TestCase):
+    def test_update_password_uses_authenticated_supabase_auth_user_endpoint(self) -> None:
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"id": "user-1"})
+
+        service = SupabaseService(
+            "https://project.supabase.co",
+            "anon-key",
+            httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+
+        service.update_password("access-token", "new-secure-password")
+
+        self.assertEqual(requests[0].method, "PUT")
+        self.assertEqual(requests[0].url.path, "/auth/v1/user")
+        self.assertEqual(requests[0].headers["authorization"], "Bearer access-token")
+        self.assertEqual(
+            requests[0].read().decode(),
+            '{"password":"new-secure-password"}',
+        )
+
     def test_save_team_invite_uses_restricted_rpc(self) -> None:
         requests = []
 

@@ -7,9 +7,82 @@ from services.auth_service import AUTH_USER_KEY, USER_STORE_KEY
 from services.settings_service import SupabaseConfig
 from models import AppUser
 from views.auth_pages import _role_actions_for
+from views.auth_pages import render_account_settings
+
+
+def render_change_password_for_guest() -> None:
+    from services.auth_service import SessionUserStore
+    from views.auth_pages import render_account_settings
+
+    render_account_settings(SessionUserStore({}), None)
+
+
+def render_change_password_for_authenticated_user() -> None:
+    import streamlit as st
+
+    from models import AppUser
+    from services.auth_service import AUTH_USER_KEY, SessionUserStore
+    from views.auth_pages import render_account_settings
+
+    class FakeSupabase:
+        enabled = True
+
+        def update_password(self, access_token: str, new_password: str) -> None:
+            st.session_state["changed_password_token"] = access_token
+            st.session_state["password_was_changed"] = bool(new_password)
+
+    user = AppUser("member@example.com", "สมาชิก", "Member")
+    state = st.session_state
+    state.setdefault(
+        AUTH_USER_KEY,
+        {**user.public_dict(), "access_token": "access-token"},
+    )
+    render_account_settings(SessionUserStore(state, FakeSupabase()), user)
 
 
 class AuthUiTests(unittest.TestCase):
+    def test_guest_cannot_access_change_password_page(self) -> None:
+        app = AppTest.from_function(
+            render_change_password_for_guest,
+            default_timeout=10,
+        ).run()
+
+        self.assertTrue(any("กรุณาเข้าสู่ระบบ" in item.value for item in app.warning))
+        self.assertFalse(any(item.label == "รหัสผ่านใหม่" for item in app.text_input))
+
+    def test_authenticated_user_sees_and_can_submit_change_password_form(self) -> None:
+        app = AppTest.from_function(
+            render_change_password_for_authenticated_user,
+            default_timeout=10,
+        ).run()
+
+        new_password = next(
+            item for item in app.text_input if item.label == "รหัสผ่านใหม่"
+        )
+        confirmation = next(
+            item for item in app.text_input if item.label == "ยืนยันรหัสผ่านใหม่"
+        )
+        submit = next(
+            item for item in app.button if item.label == "บันทึกรหัสผ่านใหม่"
+        )
+        new_password.set_value("short")
+        confirmation.set_value("short")
+        submit.click().run()
+        self.assertTrue(any("อย่างน้อย 8" in item.value for item in app.error))
+
+        new_password.set_value("new-password")
+        confirmation.set_value("different-password")
+        submit.click().run()
+        self.assertTrue(any("ไม่ตรงกัน" in item.value for item in app.error))
+
+        new_password.set_value("new-password")
+        confirmation.set_value("new-password")
+        submit.click().run()
+        self.assertTrue(
+            any("เปลี่ยนรหัสผ่านเรียบร้อยแล้ว" in item.value for item in app.success)
+        )
+        self.assertTrue(app.session_state["password_was_changed"])
+
     def test_admin_user_management_exposes_partner_actions_by_current_role(self) -> None:
         admin = AppUser("admin@example.com", "ผู้ดูแล", "Admin")
         member_actions = _role_actions_for(
