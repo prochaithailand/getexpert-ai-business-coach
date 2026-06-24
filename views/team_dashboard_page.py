@@ -3,9 +3,11 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import replace
 from html import escape
+import json
 from typing import Any
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from models import AppUser, MemberProfile
 from services.coach_service import CoachService
@@ -63,7 +65,7 @@ def render_team_dashboard(
         return
     _render_summary(snapshot)
     _render_invite_link(authenticated_user, snapshot)
-    _render_member_table(snapshot)
+    _render_member_table(snapshot, authenticated_user)
     _render_pipeline(snapshot)
     _render_progress_distribution(snapshot)
     _render_rankings(snapshot)
@@ -138,6 +140,31 @@ def _render_invite_link(
         return
     invite_link = f"https://getexpert-ai.streamlit.app/?invite_code={team.invite_code}"
     st.code(invite_link, language=None)
+    components.html(
+        f"""
+        <button id="copy-team-invite" type="button"
+          style="width:100%;padding:.65rem 1rem;border:0;border-radius:.5rem;
+          background:#1D4E89;color:#FFFFFF;font-weight:700;cursor:pointer;">
+          คัดลอกลิงก์เชิญ
+        </button>
+        <div id="copy-team-invite-status"
+          style="margin-top:.4rem;color:#1F2937;font:14px sans-serif;"></div>
+        <script>
+          const link = {json.dumps(invite_link)};
+          const button = document.getElementById("copy-team-invite");
+          const status = document.getElementById("copy-team-invite-status");
+          button.addEventListener("click", async () => {{
+            try {{
+              await navigator.clipboard.writeText(link);
+              status.textContent = "คัดลอกลิงก์เชิญแล้ว";
+            }} catch (error) {{
+              status.textContent = "ไม่สามารถคัดลอกอัตโนมัติได้ กรุณาคัดลอกจากช่องด้านบน";
+            }}
+          }});
+        </script>
+        """,
+        height=80,
+    )
     st.caption(f"ลิงก์นี้สำหรับทีม {team.name} และสร้างโดย {authenticated_user.email}")
 
 
@@ -194,7 +221,10 @@ def _card_row(cards: tuple[tuple[str, str], ...]) -> None:
     st.write("")
 
 
-def _render_member_table(snapshot: dict[str, Any]) -> None:
+def _render_member_table(
+    snapshot: dict[str, Any],
+    authenticated_user: AppUser | None,
+) -> None:
     st.subheader("ตารางสมาชิกทีม")
     rows = [
         {
@@ -210,6 +240,68 @@ def _render_member_table(snapshot: dict[str, Any]) -> None:
         for member in snapshot["members"]
     ]
     st.dataframe(rows, hide_index=True, width="stretch")
+    if not authenticated_user or authenticated_user.role != "Leader":
+        return
+    removable_members = [
+        member
+        for member in snapshot["members"]
+        if member["role"] == "Member" and member.get("email")
+    ]
+    if not removable_members:
+        return
+    st.markdown("**จัดการสมาชิกในทีม**")
+    repository = SessionTeamRepository(st.session_state)
+    pending_email = st.session_state.get("leader_remove_member_email")
+    for member in removable_members:
+        details, action = st.columns([4, 1])
+        details.write(f"{member['name']} ({member['email']})")
+        if action.button(
+            "นำออกจากทีม",
+            key=f"leader_remove_{snapshot['team_id']}_{member['email']}",
+            width="stretch",
+        ):
+            st.session_state["leader_remove_member_email"] = member["email"]
+            st.rerun()
+    selected = next(
+        (
+            member
+            for member in removable_members
+            if member["email"] == pending_email
+        ),
+        None,
+    )
+    if not selected:
+        return
+    st.warning(
+        f"ยืนยันการนำ {selected['name']} ออกจากทีม "
+        "การดำเนินการนี้ไม่ลบบัญชีผู้ใช้"
+    )
+    confirm, cancel = st.columns(2)
+    if confirm.button(
+        "ยืนยันนำออกจากทีม",
+        type="primary",
+        key="confirm_leader_remove_member",
+        width="stretch",
+    ):
+        try:
+            repository.remove_member_as_leader(
+                snapshot["team_id"],
+                AppUser(selected["email"], selected["name"], "Member"),
+                authenticated_user,
+            )
+        except (KeyError, PermissionError, ValueError, RuntimeError) as error:
+            st.error(str(error))
+            return
+        st.session_state.pop("leader_remove_member_email", None)
+        st.success(f"นำ {selected['name']} ออกจากทีมแล้ว")
+        st.rerun()
+    if cancel.button(
+        "ยกเลิก",
+        key="cancel_leader_remove_member",
+        width="stretch",
+    ):
+        st.session_state.pop("leader_remove_member_email", None)
+        st.rerun()
 
 
 def _render_pipeline(snapshot: dict[str, Any]) -> None:

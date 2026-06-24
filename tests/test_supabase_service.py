@@ -38,6 +38,34 @@ class SupabaseServiceTests(unittest.TestCase):
             '{"target_team_id":"TEAM-01","new_invite_code":"INVITE123"}',
         )
 
+    def test_remove_team_member_uses_restricted_rpc(self) -> None:
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(204)
+
+        service = SupabaseService(
+            "https://project.supabase.co",
+            "anon-key",
+            httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+
+        service.remove_team_member(
+            {"access_token": "access-token"},
+            "TEAM-01",
+            "Member@Example.com",
+        )
+
+        self.assertEqual(
+            requests[0].url.path,
+            "/rest/v1/rpc/getexpert_remove_team_member",
+        )
+        self.assertEqual(
+            requests[0].read().decode(),
+            '{"target_team_id":"TEAM-01","target_member_email":"member@example.com"}',
+        )
+
     def test_leader_query_filters_public_users_by_role(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.path, "/rest/v1/users")

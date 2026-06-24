@@ -37,7 +37,10 @@ def build_team_dashboard(
     if not profiles:
         return None
 
-    members = [_member_snapshot(state, profile) for profile in profiles]
+    members = [
+        _member_snapshot(state, profile, _profile_email(state, profile))
+        for profile in profiles
+    ]
     total_pp = sum(member["pp"] for member in members)
     total_prospects = sum(member["prospects"] for member in members)
     grades = {
@@ -80,7 +83,20 @@ def build_team_dashboard(
     return snapshot
 
 
-def _member_snapshot(state: Any, profile: MemberProfile) -> dict[str, Any]:
+def _profile_email(state: Any, profile: MemberProfile) -> str:
+    profile_key = member_progress_key(profile)
+    for email, raw in state.get("member_profiles_by_user", {}).items():
+        candidate = raw if isinstance(raw, MemberProfile) else MemberProfile.from_dict(raw)
+        if member_progress_key(candidate) == profile_key:
+            return str(email).casefold()
+    return ""
+
+
+def _member_snapshot(
+    state: Any,
+    profile: MemberProfile,
+    email: str = "",
+) -> dict[str, Any]:
     key = member_progress_key(profile)
     progress = calculate_plan_progress(
         dict(state.get("plan_completion_by_member", {}).get(key, {}))
@@ -140,6 +156,7 @@ def _member_snapshot(state: Any, profile: MemberProfile) -> dict[str, Any]:
     ))
     return {
         "member_key": key,
+        "email": email,
         "name": profile.name,
         "role": profile.role,
         "pp": int(state.get("pp_scores_by_member", {}).get(key, progress.pp_score)),

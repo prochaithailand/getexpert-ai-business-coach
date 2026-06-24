@@ -121,6 +121,52 @@ class SessionTeamRepository:
         self._store_assigned_profile(user, cleared, "Member")
         return cleared
 
+    def remove_member_as_leader(
+        self,
+        team_id: str,
+        user: AppUser,
+        leader: AppUser,
+    ) -> MemberProfile:
+        team = self.get(team_id)
+        if not team:
+            raise KeyError("ไม่พบทีมที่ต้องการจัดการ")
+        if (
+            leader.role != "Leader"
+            or not team.leader_email
+            or team.leader_email.casefold() != leader.email.casefold()
+        ):
+            raise PermissionError("คุณไม่มีสิทธิ์นำสมาชิกออกจากทีมนี้")
+        profile = self.profile_for_user(user.email)
+        if (
+            not profile
+            or profile.role != "Member"
+            or _team_id(profile.team_id) != team.team_id
+        ):
+            raise ValueError("สมาชิกคนนี้ไม่ได้อยู่ในทีมของคุณ")
+        cleared = replace(
+            profile,
+            team_name="",
+            team_id="",
+            team_leader="",
+            invited_by="",
+            joined_at="",
+            role="Member",
+        )
+        supabase = get_supabase_service(self.state)
+        authenticated = get_authenticated_supabase_user(self.state)
+        if supabase and authenticated:
+            saved = run_supabase_sync(
+                self.state,
+                supabase.remove_team_member,
+                authenticated,
+                team.team_id,
+                user.email,
+            )
+            if not saved:
+                raise RuntimeError("ไม่สามารถนำสมาชิกออกจากทีมได้ กรุณาลองใหม่อีกครั้ง")
+        self._store_assigned_profile(user, cleared, "Member", persist=False)
+        return cleared
+
     def profile_for_user(self, email: str) -> MemberProfile | None:
         raw = self.state.get("member_profiles_by_user", {}).get(email.casefold())
         return MemberProfile.from_dict(raw) if raw else None
@@ -299,6 +345,7 @@ class SessionTeamRepository:
         user: AppUser,
         assigned: MemberProfile,
         role: str | None,
+        persist: bool = True,
     ) -> None:
         email = user.email.casefold()
         raw = self.state.get("member_profiles_by_user", {}).get(email)
@@ -322,7 +369,7 @@ class SessionTeamRepository:
 
         supabase = get_supabase_service(self.state)
         authenticated = get_authenticated_supabase_user(self.state)
-        if supabase and authenticated:
+        if persist and supabase and authenticated:
             run_supabase_sync(
                 self.state,
                 supabase.assign_user_to_team,

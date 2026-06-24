@@ -308,6 +308,22 @@ class SupabaseService:
         )
         self._raise_for_error(response)
 
+    def remove_team_member(
+        self,
+        authenticated: dict[str, Any],
+        team_id: str,
+        member_email: str,
+    ) -> None:
+        response = self.client.post(
+            f"{self.url}/rest/v1/rpc/getexpert_remove_team_member",
+            headers=self._headers(authenticated["access_token"]),
+            json={
+                "target_team_id": team_id,
+                "target_member_email": member_email.casefold(),
+            },
+        )
+        self._raise_for_error(response)
+
     def assign_user_to_team(
         self,
         authenticated: dict[str, Any],

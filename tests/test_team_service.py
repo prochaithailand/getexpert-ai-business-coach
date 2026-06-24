@@ -188,6 +188,44 @@ class TeamServiceTests(unittest.TestCase):
         self.assertEqual(assigned.team_id, "TEAM-NEW")
         self.assertEqual(assigned.role, "Member")
 
+    def test_leader_removes_only_member_from_own_team(self) -> None:
+        leader = AppUser("leader@example.com", "หัวหน้าทีม", "Leader")
+        other_leader = AppUser("other@example.com", "หัวหน้าทีมอื่น", "Leader")
+        member = AppUser("member@example.com", "สมาชิก", "Member")
+        profile = MemberProfile(
+            name=member.full_name,
+            occupation="งาน",
+            team_name="ทีมหนึ่ง",
+            team_id="TEAM-ONE",
+            team_leader=leader.full_name,
+            role="Member",
+        )
+        state = {
+            USER_STORE_KEY: {
+                leader.email: leader.to_dict(),
+                other_leader.email: other_leader.to_dict(),
+                member.email: member.to_dict(),
+            },
+            "member_profiles_by_user": {member.email: profile.to_dict()},
+            "teams": {
+                "TEAM-ONE": Team(
+                    "ทีมหนึ่ง",
+                    "TEAM-ONE",
+                    leader.full_name,
+                    leader_email=leader.email,
+                ).to_dict(),
+            },
+        }
+        repository = SessionTeamRepository(state)
+
+        with self.assertRaises(PermissionError):
+            repository.remove_member_as_leader("TEAM-ONE", member, other_leader)
+
+        removed = repository.remove_member_as_leader("TEAM-ONE", member, leader)
+
+        self.assertEqual(removed.team_id, "")
+        self.assertEqual(removed.role, "Member")
+
 
 if __name__ == "__main__":
     unittest.main()
