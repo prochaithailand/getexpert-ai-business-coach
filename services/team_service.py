@@ -144,10 +144,16 @@ class SessionTeamRepository:
         invite_code = team.invite_code or (
             secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:12].upper()
         )
-        return self.update(
+        updated = self.update(
             team.team_id,
             replace(team, leader_email=leader.email.casefold(), invite_code=invite_code),
         )
+        if self.state.get("supabase_sync_error"):
+            store = dict(self.state.get(self.KEY, {}))
+            store[team.team_id] = team.to_dict()
+            self.state[self.KEY] = store
+            raise RuntimeError("ไม่สามารถบันทึกลิงก์คำเชิญได้ กรุณาลองใหม่อีกครั้ง")
+        return updated
 
     def find_by_invite_code(self, invite_code: str) -> Team | None:
         normalized = invite_code.strip().casefold()

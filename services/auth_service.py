@@ -40,11 +40,13 @@ class SessionUserStore:
             users[normalized_email] = user.to_dict()
             self.state[USER_STORE_KEY] = users
             if payload.get("access_token"):
-                self.state[AUTH_USER_KEY] = {
+                authenticated = {
                     **user.public_dict(), "user_id": auth_user.get("id", ""),
                     "access_token": payload.get("access_token", ""),
                     "refresh_token": payload.get("refresh_token", ""),
                 }
+                self.state[AUTH_USER_KEY] = authenticated
+                self.supabase.load_user_data(self.state, authenticated)
             return user
         users = dict(self.state.get(USER_STORE_KEY, {}))
         if normalized_email in users:

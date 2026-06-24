@@ -1,10 +1,33 @@
 import unittest
+from unittest.mock import Mock
 
 from models import MemberProfile
 from services.auth_service import AUTH_USER_KEY, USER_STORE_KEY, SessionUserStore
 
 
 class AuthServiceTests(unittest.TestCase):
+    def test_supabase_registration_loads_team_data_when_session_is_created(self) -> None:
+        state = {"pending_invite_code": "INVITE123"}
+        supabase = Mock()
+        supabase.enabled = True
+        supabase.sign_up.return_value = {
+            "access_token": "access-token",
+            "refresh_token": "refresh-token",
+            "user": {"id": "user-1"},
+        }
+        store = SessionUserStore(state, supabase)
+
+        user = store.register(
+            "member@example.com",
+            "strong-pass",
+            "สมาชิกใหม่",
+        )
+
+        authenticated = state[AUTH_USER_KEY]
+        supabase.load_user_data.assert_called_once_with(state, authenticated)
+        self.assertEqual(state["pending_invite_code"], "INVITE123")
+        self.assertEqual(user.role, "Member")
+
     def test_registration_defaults_to_member_and_hashes_password(self) -> None:
         state = {}
         store = SessionUserStore(state)

@@ -123,10 +123,7 @@ class SupabaseService:
         response = self._request("DELETE", table, params=filters, access_token=access_token)
         self._raise_for_error(response)
 
-    def load_user_data(self, state: Any, authenticated: dict[str, Any]) -> None:
-        from services.workplan_service import create_default_workplan
-
-        email = str(authenticated["email"]).casefold()
+    def load_teams(self, state: Any, authenticated: dict[str, Any]) -> None:
         token = str(authenticated.get("access_token", ""))
         if not token:
             return
@@ -138,8 +135,18 @@ class SupabaseService:
             }).to_dict()
             for row in teams if row.get("team_id") and row.get("team_data")
         }
+
+    def load_user_data(self, state: Any, authenticated: dict[str, Any]) -> None:
+        from services.workplan_service import create_default_workplan
+
+        email = str(authenticated["email"]).casefold()
+        token = str(authenticated.get("access_token", ""))
+        if not token:
+            return
+        self.load_teams(state, authenticated)
         team_objects = {
-            team_id: Team.from_dict(team_data) for team_id, team_data in state["teams"].items()
+            team_id: Team.from_dict(team_data)
+            for team_id, team_data in state.get("teams", {}).items()
         }
         profile_rows = self.select("member_profiles", {}, token)
         if not any(str(row.get("email", "")).casefold() == email for row in profile_rows):

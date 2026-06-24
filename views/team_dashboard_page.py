@@ -19,7 +19,12 @@ from services.team_dashboard_service import (
     team_dashboard_signature,
 )
 from services.team_service import SessionTeamRepository
-from services.supabase_service import get_authenticated_supabase_user, get_supabase_service, run_supabase_sync
+from services.supabase_service import (
+    SupabaseError,
+    get_authenticated_supabase_user,
+    get_supabase_service,
+    run_supabase_sync,
+)
 
 
 def render_team_dashboard(
@@ -126,7 +131,7 @@ def _render_invite_link(
         if st.button("สร้างลิงก์เชิญเข้าทีม", type="primary"):
             try:
                 team = repository.generate_invite_code(team.team_id, authenticated_user)
-            except (KeyError, PermissionError) as error:
+            except (KeyError, PermissionError, RuntimeError) as error:
                 st.warning(str(error))
                 return
             st.rerun()
@@ -142,6 +147,17 @@ def render_team_invite_confirmation(
 ) -> bool:
     repository = SessionTeamRepository(st.session_state)
     team = repository.find_by_invite_code(invite_code)
+    if not team:
+        supabase = get_supabase_service(st.session_state)
+        authenticated = get_authenticated_supabase_user(st.session_state)
+        if supabase and authenticated:
+            try:
+                supabase.load_teams(st.session_state, authenticated)
+            except SupabaseError:
+                st.warning("ยังไม่สามารถตรวจสอบคำเชิญได้ กรุณาลองใหม่อีกครั้ง")
+                return False
+            repository = SessionTeamRepository(st.session_state)
+            team = repository.find_by_invite_code(invite_code)
     if not team:
         st.warning("ไม่พบคำเชิญเข้าร่วมทีม หรือคำเชิญไม่ถูกต้อง")
         return False
