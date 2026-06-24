@@ -10,6 +10,7 @@ from services.subscription_service import (
     apply_subscription_action,
     effective_subscription_status,
     has_active_subscription,
+    normalize_subscription_user,
 )
 from views.payment_page import LINE_OA_URL
 
@@ -28,6 +29,19 @@ def render_pending_payment_page():
 
 
 class SubscriptionServiceTests(unittest.TestCase):
+    def test_legacy_app_user_without_subscription_attributes_falls_back_active(self):
+        legacy = object.__new__(AppUser)
+        object.__setattr__(legacy, "email", "legacy@example.com")
+        object.__setattr__(legacy, "full_name", "ผู้ใช้เดิม")
+        object.__setattr__(legacy, "role", "Member")
+        object.__setattr__(legacy, "password_hash", "")
+
+        normalized = normalize_subscription_user(legacy)
+
+        self.assertEqual(normalized.subscription_status, "active")
+        self.assertEqual(normalized.subscription_plan, "Member")
+        self.assertTrue(has_active_subscription(legacy))
+
     def test_pending_user_sees_payment_page_and_qr_code(self):
         app = AppTest.from_function(render_pending_payment_page).run()
         visible = "\n".join(

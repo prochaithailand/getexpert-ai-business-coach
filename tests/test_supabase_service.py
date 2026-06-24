@@ -225,6 +225,34 @@ class SupabaseServiceTests(unittest.TestCase):
         self.assertEqual(user["access_token"], "access-token")
         self.assertEqual(user["user_id"], "user-1")
 
+    def test_sign_in_safely_maps_null_subscription_fields(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/auth/v1/token"):
+                return httpx.Response(200, json={
+                    "access_token": "access-token",
+                    "refresh_token": "refresh-token",
+                    "user": {"id": "user-1", "user_metadata": {}},
+                })
+            if request.url.path.endswith("/rest/v1/users"):
+                return httpx.Response(200, json=[{
+                    "email": "legacy@example.com",
+                    "full_name": "ผู้ใช้เดิม",
+                    "role": "Member",
+                    "subscription_status": None,
+                    "subscription_plan": None,
+                }])
+            return httpx.Response(404)
+
+        service = SupabaseService(
+            "https://project.supabase.co", "anon-key",
+            httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+
+        user = service.sign_in("legacy@example.com", "password")
+
+        self.assertEqual(user["subscription_status"], "active")
+        self.assertEqual(user["subscription_plan"], "Member")
+
     def test_schema_verification_reports_missing_tables(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path.endswith("/rest/v1/pp_scores"):

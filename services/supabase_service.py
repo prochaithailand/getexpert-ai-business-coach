@@ -10,6 +10,7 @@ import httpx
 
 from models import ActionItem, AppUser, MemberProfile, Team
 from services.progress_service import calculate_plan_progress, member_progress_key
+from services.subscription_service import normalize_subscription_user
 
 
 REQUIRED_TABLES = (
@@ -122,6 +123,7 @@ class SupabaseService:
     def update_user_subscription(
         self, target_email: str, user: AppUser, access_token: str
     ) -> None:
+        user = normalize_subscription_user(user)
         response = self._request(
             "PATCH", "users", params={"email": f"eq.{target_email.casefold()}"},
             json={

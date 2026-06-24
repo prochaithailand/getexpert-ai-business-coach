@@ -11,7 +11,11 @@ from typing import Any
 from models import AppUser, MemberProfile
 from services.progress_service import member_progress_key
 from services.supabase_service import SupabaseService
-from services.subscription_service import apply_subscription_action, effective_subscription_status
+from services.subscription_service import (
+    apply_subscription_action,
+    effective_subscription_status,
+    normalize_subscription_user,
+)
 
 
 AUTH_USER_KEY = "authenticated_user"
@@ -105,9 +109,13 @@ class SessionUserStore:
         if not user:
             self.logout()
             return None
+        user = normalize_subscription_user(user)
+        users = dict(self.state.get(USER_STORE_KEY, {}))
+        users[user.email] = user.to_dict()
+        self.state[USER_STORE_KEY] = users
         self.state[AUTH_USER_KEY] = {**dict(authenticated), **user.public_dict()}
         status = effective_subscription_status(user)
-        if status != user.subscription_status:
+        if status != getattr(user, "subscription_status", "active"):
             user = AppUser.from_dict({**user.to_dict(), "subscription_status": status})
             users = dict(self.state.get(USER_STORE_KEY, {}))
             users[user.email] = user.to_dict()
@@ -181,7 +189,10 @@ class SessionUserStore:
 
     def get(self, email: str) -> AppUser | None:
         raw = self.state.get(USER_STORE_KEY, {}).get(_normalize_email(email))
-        return AppUser.from_dict(raw) if raw else None
+        if not raw:
+            return None
+        user = raw if isinstance(raw, AppUser) else AppUser.from_dict(raw)
+        return normalize_subscription_user(user)
 
     def list_users(self) -> list[AppUser]:
         authenticated = self.state.get(AUTH_USER_KEY, {})

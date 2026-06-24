@@ -6,6 +6,7 @@ from models import AppUser
 from services.auth_service import SessionUserStore
 from services.permissions import UNAUTHORIZED_MESSAGE
 from services.supabase_service import SupabaseError
+from services.subscription_service import normalize_subscription_user
 
 
 def render_login(store: SessionUserStore) -> None:
@@ -169,6 +170,7 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
         unsafe_allow_html=True,
     )
     for account in store.list_users():
+        account = normalize_subscription_user(account)
         role_label = {
             "Member": "สมาชิก",
             "Leader": "ผู้นำ",

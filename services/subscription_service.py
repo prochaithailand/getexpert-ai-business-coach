@@ -10,13 +10,39 @@ LOCKED_MESSAGE = "กรุณาชำระเงินและรอกา�
 ACTIVE_STATUSES = {"active"}
 
 
+def normalize_subscription_user(user: AppUser) -> AppUser:
+    return AppUser(
+        email=str(getattr(user, "email", "")),
+        full_name=str(getattr(user, "full_name", "")),
+        role=str(getattr(user, "role", "Member") or "Member"),
+        password_hash=str(getattr(user, "password_hash", "")),
+        subscription_status=str(
+            getattr(user, "subscription_status", "active") or "active"
+        ),
+        subscription_plan=str(
+            getattr(user, "subscription_plan", "Member") or "Member"
+        ),
+        subscription_started_at=str(
+            getattr(user, "subscription_started_at", "") or ""
+        ),
+        subscription_expires_at=str(
+            getattr(user, "subscription_expires_at", "") or ""
+        ),
+        last_payment_at=str(getattr(user, "last_payment_at", "") or ""),
+        approved_by=str(getattr(user, "approved_by", "") or ""),
+        approved_at=str(getattr(user, "approved_at", "") or ""),
+    )
+
+
 def effective_subscription_status(user: AppUser, now: datetime | None = None) -> str:
+    user = normalize_subscription_user(user)
     if user.role == "Admin":
         return "active"
-    status = user.subscription_status or "active"
-    if status == "active" and user.subscription_expires_at:
+    status = getattr(user, "subscription_status", "active") or "active"
+    expires_at = getattr(user, "subscription_expires_at", "") or ""
+    if status == "active" and expires_at:
         try:
-            expires = datetime.fromisoformat(user.subscription_expires_at.replace("Z", "+00:00"))
+            expires = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
             if expires < (now or datetime.now(timezone.utc)):
                 return "expired"
         except ValueError:
@@ -25,7 +51,7 @@ def effective_subscription_status(user: AppUser, now: datetime | None = None) ->
 
 
 def has_active_subscription(user: AppUser, now: datetime | None = None) -> bool:
-    return user.role == "Admin" or effective_subscription_status(user, now) == "active"
+    return getattr(user, "role", "Member") == "Admin" or effective_subscription_status(user, now) == "active"
 
 
 def apply_subscription_action(
@@ -34,6 +60,7 @@ def apply_subscription_action(
     admin_email: str,
     now: datetime | None = None,
 ) -> AppUser:
+    user = normalize_subscription_user(user)
     current = now or datetime.now(timezone.utc)
     if action in {"approve", "renew"}:
         base = current

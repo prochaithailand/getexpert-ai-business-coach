@@ -5,13 +5,17 @@ from pathlib import Path
 import streamlit as st
 
 from models import AppUser
-from services.subscription_service import effective_subscription_status
+from services.subscription_service import (
+    effective_subscription_status,
+    normalize_subscription_user,
+)
 
 
 LINE_OA_URL = "https://lin.ee/YXNuJrR5"
 
 
 def render_payment_page(user: AppUser) -> None:
+    user = normalize_subscription_user(user)
     st.title("ชำระเงิน / เปิดใช้งาน")
     status = effective_subscription_status(user)
     labels = {
