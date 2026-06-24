@@ -192,18 +192,39 @@ def _render_assign_members(repository: SessionTeamRepository, accounts: list[App
     team = repository.get(team_id or "")
     if not team:
         return
-    candidates = [account for account in accounts if account.role != "Admin"]
+    member_accounts = [account for account in accounts if account.role == "Member"]
+    candidates = [
+        account
+        for account in member_accounts
+        if (
+            not (profile := repository.profile_for_user(account.email))
+            or not profile.team_id
+            or profile.team_id.strip().upper() == team.team_id
+        )
+    ]
+    current_members = [
+        account
+        for account in member_accounts
+        if (
+            (profile := repository.profile_for_user(account.email))
+            and profile.team_id.strip().upper() == team.team_id
+        )
+    ]
     st.subheader(f"กำหนดสมาชิกเข้าทีม: {team.name}")
+    st.info("สมาชิกที่อยู่ในทีมอื่นแล้ว ต้องลบออกจากทีมเดิมก่อนจึงจะย้ายทีมได้")
     if not candidates:
-        st.info("ยังไม่มีบัญชีสมาชิกที่สามารถกำหนดเข้าทีมได้")
-        return
-    options = _account_options(candidates)
-    with st.form(f"team_members_form_{team.team_id}"):
-        selected = st.multiselect("เลือกสมาชิก", options)
-        st.caption("สมาชิกที่เลือกจะถูกย้ายมาอยู่ทีมนี้ โดยบทบาทเดิมจะไม่เปลี่ยนแปลง")
-        save, cancel = st.columns(2)
-        submitted = save.form_submit_button("บันทึกสมาชิกทีม", type="primary", width="stretch")
-        cancelled = cancel.form_submit_button("ยกเลิก", width="stretch")
+        st.info("ยังไม่มีบัญชีสมาชิกที่สามารถกำหนดเข้าทีมนี้ได้")
+        submitted = False
+        selected: list[str] = []
+        cancelled = st.button("ยกเลิก", key=f"cancel_members_{team.team_id}")
+    else:
+        options = _account_options(candidates)
+        with st.form(f"team_members_form_{team.team_id}"):
+            selected = st.multiselect("เลือกสมาชิก", options)
+            st.caption("เลือกได้เฉพาะสมาชิกที่ยังไม่มีทีม หรืออยู่ในทีมนี้แล้ว")
+            save, cancel = st.columns(2)
+            submitted = save.form_submit_button("บันทึกสมาชิกทีม", type="primary", width="stretch")
+            cancelled = cancel.form_submit_button("ยกเลิก", width="stretch")
     if cancelled:
         st.session_state.pop("team_members_id", None)
         st.rerun()
@@ -218,11 +239,30 @@ def _render_assign_members(repository: SessionTeamRepository, accounts: list[App
         try:
             repository.assign_members(team.team_id, selected_accounts)
         except (KeyError, ValueError) as error:
-            st.warning(str(error))
+            st.error(str(error))
             return
         st.session_state.pop("team_members_id", None)
         st.session_state.team_flash_message = f"เพิ่มสมาชิก {len(selected_accounts)} คนเข้าทีม {team.name} แล้ว"
         st.rerun()
+    if current_members:
+        st.markdown("**สมาชิกในทีมปัจจุบัน**")
+        for account in current_members:
+            details, action = st.columns([4, 1])
+            details.write(f"{account.full_name} ({account.email})")
+            if action.button(
+                "นำออกจากทีม",
+                key=f"remove_member_{team.team_id}_{account.email}",
+                width="stretch",
+            ):
+                try:
+                    repository.remove_member(team.team_id, account)
+                except ValueError as error:
+                    st.error(str(error))
+                    return
+                st.session_state.team_flash_message = (
+                    f"นำ {account.full_name} ออกจากทีม {team.name} แล้ว"
+                )
+                st.rerun()
 
 
 def _render_delete_confirmation(repository: SessionTeamRepository) -> None:

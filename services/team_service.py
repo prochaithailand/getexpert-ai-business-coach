@@ -102,6 +102,29 @@ class SessionTeamRepository:
             raise ValueError("ไม่สามารถกำหนดบัญชีผู้ดูแลระบบเป็นสมาชิกทีม")
         return [self._assign_user(team, user, None) for user in users]
 
+    def remove_member(self, team_id: str, user: AppUser) -> MemberProfile:
+        normalized_team_id = _team_id(team_id)
+        profile = self.profile_for_user(user.email)
+        if not profile or _team_id(profile.team_id) != normalized_team_id:
+            raise ValueError("สมาชิกคนนี้ไม่ได้อยู่ในทีมที่เลือก")
+        if user.role != "Member" or profile.role != "Member":
+            raise ValueError("สามารถนำออกจากทีมได้เฉพาะบัญชีสมาชิก")
+        cleared = replace(
+            profile,
+            team_name="",
+            team_id="",
+            team_leader="",
+            invited_by="",
+            joined_at="",
+            role="Member",
+        )
+        self._store_assigned_profile(user, cleared, "Member")
+        return cleared
+
+    def profile_for_user(self, email: str) -> MemberProfile | None:
+        raw = self.state.get("member_profiles_by_user", {}).get(email.casefold())
+        return MemberProfile.from_dict(raw) if raw else None
+
     def generate_invite_code(self, team_id: str, leader: AppUser) -> Team:
         team = self.get(team_id)
         if not team:
@@ -232,6 +255,9 @@ class SessionTeamRepository:
             occupation="",
             role=user.role,
         )
+        current_team_id = _team_id(profile.team_id)
+        if user.role == "Member" and current_team_id and current_team_id != team.team_id:
+            raise ValueError("สมาชิกคนนี้อยู่ในทีมอื่นแล้ว กรุณาลบออกจากทีมเดิมก่อน")
         assigned = replace(
             profile,
             team_name=team.name,

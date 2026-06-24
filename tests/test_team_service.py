@@ -130,6 +130,64 @@ class TeamServiceTests(unittest.TestCase):
         self.assertTrue(joined.joined_at)
         self.assertEqual(state[USER_STORE_KEY][member.email]["role"], "Member")
 
+    def test_member_cannot_be_assigned_to_a_different_team(self) -> None:
+        member = AppUser("member@example.com", "สมาชิกทีมเดิม", "Member")
+        profile = MemberProfile(
+            name=member.full_name,
+            occupation="งาน",
+            team_name="ทีมเดิม",
+            team_id="TEAM-OLD",
+            role="Member",
+        )
+        state = {
+            USER_STORE_KEY: {member.email: member.to_dict()},
+            "member_profiles_by_user": {member.email: profile.to_dict()},
+            "teams": {
+                "TEAM-OLD": Team("ทีมเดิม", "TEAM-OLD", "หัวหน้าเดิม").to_dict(),
+                "TEAM-NEW": Team("ทีมใหม่", "TEAM-NEW", "หัวหน้าใหม่").to_dict(),
+            },
+        }
+        repository = SessionTeamRepository(state)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "สมาชิกคนนี้อยู่ในทีมอื่นแล้ว กรุณาลบออกจากทีมเดิมก่อน",
+        ):
+            repository.assign_members("TEAM-NEW", [member])
+
+        self.assertEqual(
+            state["member_profiles_by_user"][member.email]["team_id"],
+            "TEAM-OLD",
+        )
+
+    def test_admin_removes_member_before_assigning_to_another_team(self) -> None:
+        member = AppUser("member@example.com", "สมาชิกย้ายทีม", "Member")
+        profile = MemberProfile(
+            name=member.full_name,
+            occupation="งาน",
+            team_name="ทีมเดิม",
+            team_id="TEAM-OLD",
+            team_leader="หัวหน้าเดิม",
+            role="Member",
+        )
+        state = {
+            USER_STORE_KEY: {member.email: member.to_dict()},
+            "member_profiles_by_user": {member.email: profile.to_dict()},
+            "teams": {
+                "TEAM-OLD": Team("ทีมเดิม", "TEAM-OLD", "หัวหน้าเดิม").to_dict(),
+                "TEAM-NEW": Team("ทีมใหม่", "TEAM-NEW", "หัวหน้าใหม่").to_dict(),
+            },
+        }
+        repository = SessionTeamRepository(state)
+
+        removed = repository.remove_member("TEAM-OLD", member)
+        assigned = repository.assign_members("TEAM-NEW", [member])[0]
+
+        self.assertEqual(removed.team_id, "")
+        self.assertEqual(removed.role, "Member")
+        self.assertEqual(assigned.team_id, "TEAM-NEW")
+        self.assertEqual(assigned.role, "Member")
+
 
 if __name__ == "__main__":
     unittest.main()
