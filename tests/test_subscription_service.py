@@ -68,6 +68,17 @@ class SubscriptionServiceTests(unittest.TestCase):
         admin = AppUser("admin@example.com", "Admin", "Admin", subscription_status="suspended")
         self.assertTrue(has_active_subscription(admin))
         self.assertIn("หน้าแรก", visible_navigation(items, admin))
+        self.assertNotIn("ชำระเงิน / เปิดใช้งาน", visible_navigation(items, admin))
+
+        active = AppUser(
+            "active@example.com", "ผู้ใช้ Active",
+            subscription_status="active",
+            subscription_expires_at=(datetime.now(timezone.utc) + timedelta(days=10)).isoformat(),
+        )
+        active_navigation = visible_navigation(items, active)
+        self.assertIn("หน้าแรก", active_navigation)
+        self.assertIn("Dashboard สมาชิก", active_navigation)
+        self.assertNotIn("ชำระเงิน / เปิดใช้งาน", active_navigation)
 
     def test_expiration_and_admin_approval_and_renewal(self):
         now = datetime(2026, 6, 24, tzinfo=timezone.utc)

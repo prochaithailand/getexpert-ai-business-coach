@@ -6,7 +6,10 @@ from models import AppUser
 from services.auth_service import SessionUserStore
 from services.permissions import UNAUTHORIZED_MESSAGE
 from services.supabase_service import SupabaseError
-from services.subscription_service import normalize_subscription_user
+from services.subscription_service import (
+    effective_subscription_status,
+    normalize_subscription_user,
+)
 
 
 def render_login(store: SessionUserStore) -> None:
@@ -128,10 +131,22 @@ def render_account_settings(store: SessionUserStore, user: AppUser | None) -> No
     if user is None:
         st.warning("กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน")
         return
+    user = normalize_subscription_user(user)
     st.markdown(
         "<p class='section-lead'>จัดการความปลอดภัยสำหรับบัญชีของคุณ</p>",
         unsafe_allow_html=True,
     )
+    status = effective_subscription_status(user)
+    status_label = {
+        "active": "ใช้งานอยู่",
+        "pending_payment": "รอชำระเงิน / รออนุมัติ",
+        "expired": "หมดอายุ",
+        "suspended": "ถูกระงับ",
+    }.get(status, status)
+    st.subheader("สถานะสมาชิก")
+    st.write(f"สถานะสมาชิก: **{status_label}**")
+    if user.subscription_expires_at:
+        st.write(f"ใช้งานได้ถึง: **{user.subscription_expires_at[:10]}**")
     st.subheader("เปลี่ยนรหัสผ่าน")
     st.caption(f"บัญชี: {user.email}")
     with st.form("change_password_form", clear_on_submit=True):

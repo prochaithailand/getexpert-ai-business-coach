@@ -25,7 +25,7 @@ def can_access_team_dashboard(subject: MemberProfile | AppUser | None) -> bool:
 def visible_navigation(items: Sequence[str], subject: MemberProfile | AppUser | None) -> tuple[str, ...]:
     if isinstance(subject, AppUser) and not has_active_subscription(subject):
         return tuple(item for item in items if item in LIMITED_PAGES)
-    hidden = set()
+    hidden = {PAYMENT_PAGE} if isinstance(subject, AppUser) else set()
     if not can_access_team_management(subject):
         hidden.add(TEAM_MANAGEMENT_PAGE)
         hidden.add(USER_MANAGEMENT_PAGE)
