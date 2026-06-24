@@ -136,23 +136,43 @@ class SessionTeamRepository:
             else MemberProfile.from_dict(raw_profile)
         )
         assigned_by_profile = _team_id(current_profile.team_id) == team.team_id
-        if leader.role != "Leader" or (
+        if leader.role not in {"Leader", "Admin"} or (
+            leader.role != "Admin"
+            and (
             team.leader_email
             and team.leader_email.casefold() != leader.email.casefold()
-        ) or (not team.leader_email and not assigned_by_profile):
+            )
+        ) or (
+            leader.role != "Admin"
+            and not team.leader_email
+            and not assigned_by_profile
+        ):
             raise PermissionError("คุณไม่มีสิทธิ์สร้างลิงก์คำเชิญสำหรับทีมนี้")
         invite_code = team.invite_code or (
             secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:12].upper()
         )
-        updated = self.update(
-            team.team_id,
-            replace(team, leader_email=leader.email.casefold(), invite_code=invite_code),
+        updated = replace(
+            team,
+            leader_email=team.leader_email or (
+                leader.email.casefold() if leader.role == "Leader" else ""
+            ),
+            invite_code=invite_code,
         )
-        if self.state.get("supabase_sync_error"):
-            store = dict(self.state.get(self.KEY, {}))
-            store[team.team_id] = team.to_dict()
-            self.state[self.KEY] = store
-            raise RuntimeError("ไม่สามารถบันทึกลิงก์คำเชิญได้ กรุณาลองใหม่อีกครั้ง")
+        supabase = get_supabase_service(self.state)
+        authenticated = get_authenticated_supabase_user(self.state)
+        if supabase and authenticated:
+            saved = run_supabase_sync(
+                self.state,
+                supabase.save_team_invite,
+                authenticated,
+                team.team_id,
+                invite_code,
+            )
+            if not saved:
+                raise RuntimeError("ไม่สามารถบันทึกลิงก์คำเชิญได้ กรุณาลองใหม่อีกครั้ง")
+        store = dict(self.state.get(self.KEY, {}))
+        store[team.team_id] = updated.to_dict()
+        self.state[self.KEY] = store
         return updated
 
     def find_by_invite_code(self, invite_code: str) -> Team | None:

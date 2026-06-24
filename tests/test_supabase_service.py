@@ -10,6 +10,34 @@ from services.workplan_service import add_contact, create_default_workplan, repl
 
 
 class SupabaseServiceTests(unittest.TestCase):
+    def test_save_team_invite_uses_restricted_rpc(self) -> None:
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(204)
+
+        service = SupabaseService(
+            "https://project.supabase.co",
+            "anon-key",
+            httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+
+        service.save_team_invite(
+            {"access_token": "access-token"},
+            "TEAM-01",
+            "INVITE123",
+        )
+
+        self.assertEqual(
+            requests[0].url.path,
+            "/rest/v1/rpc/getexpert_set_team_invite",
+        )
+        self.assertEqual(
+            requests[0].read().decode(),
+            '{"target_team_id":"TEAM-01","new_invite_code":"INVITE123"}',
+        )
+
     def test_leader_query_filters_public_users_by_role(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.path, "/rest/v1/users")

@@ -295,6 +295,19 @@ class SupabaseService:
             "updated_by": authenticated["email"], "updated_at": _now(),
         }, "team_id", authenticated["access_token"])
 
+    def save_team_invite(
+        self,
+        authenticated: dict[str, Any],
+        team_id: str,
+        invite_code: str,
+    ) -> None:
+        response = self.client.post(
+            f"{self.url}/rest/v1/rpc/getexpert_set_team_invite",
+            headers=self._headers(authenticated["access_token"]),
+            json={"target_team_id": team_id, "new_invite_code": invite_code},
+        )
+        self._raise_for_error(response)
+
     def assign_user_to_team(
         self,
         authenticated: dict[str, Any],
