@@ -10,6 +10,35 @@ from services.workplan_service import add_contact, create_default_workplan, repl
 
 
 class SupabaseServiceTests(unittest.TestCase):
+    def test_request_password_reset_uses_supabase_recover_and_redirect_url(self) -> None:
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={})
+
+        service = SupabaseService(
+            "https://project.supabase.co",
+            "anon-key",
+            httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+
+        service.request_password_reset(
+            "member@example.com",
+            "https://getexpert-ai.streamlit.app",
+        )
+
+        self.assertEqual(requests[0].method, "POST")
+        self.assertEqual(requests[0].url.path, "/auth/v1/recover")
+        self.assertEqual(
+            requests[0].url.params["redirect_to"],
+            "https://getexpert-ai.streamlit.app",
+        )
+        self.assertEqual(
+            requests[0].read().decode(),
+            '{"email":"member@example.com"}',
+        )
+
     def test_update_password_uses_authenticated_supabase_auth_user_endpoint(self) -> None:
         requests = []
 

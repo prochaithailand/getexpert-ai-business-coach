@@ -40,7 +40,102 @@ def render_change_password_for_authenticated_user() -> None:
     render_account_settings(SessionUserStore(state, FakeSupabase()), user)
 
 
+def render_forgot_password_page() -> None:
+    import streamlit as st
+
+    from services.auth_service import SessionUserStore
+    from views.auth_pages import render_forgot_password
+
+    class FakeSupabase:
+        enabled = True
+
+        def request_password_reset(self, email: str, redirect_url: str) -> None:
+            st.session_state["reset_email"] = email
+            st.session_state["reset_redirect_url"] = redirect_url
+
+    render_forgot_password(
+        SessionUserStore(st.session_state, FakeSupabase()),
+        "https://getexpert-ai.streamlit.app",
+    )
+
+
+def render_reset_password_page() -> None:
+    import streamlit as st
+
+    from services.auth_service import SessionUserStore
+    from views.auth_pages import render_reset_password
+
+    class FakeSupabase:
+        enabled = True
+
+        def update_password(self, access_token: str, new_password: str) -> None:
+            st.session_state["recovery_token_used"] = access_token
+            st.session_state["reset_password_saved"] = bool(new_password)
+
+    st.session_state.setdefault(
+        "password_recovery_access_token",
+        "recovery-token",
+    )
+    render_reset_password(
+        SessionUserStore(st.session_state, FakeSupabase()),
+        "recovery-token",
+    )
+
+
 class AuthUiTests(unittest.TestCase):
+    def test_forgot_password_form_sends_email_with_configured_redirect(self) -> None:
+        app = AppTest.from_function(
+            render_forgot_password_page,
+            default_timeout=10,
+        ).run()
+
+        next(item for item in app.text_input if item.label == "อีเมล").set_value(
+            "Member@Example.com"
+        )
+        next(
+            item
+            for item in app.button
+            if item.label == "ส่งลิงก์รีเซ็ตรหัสผ่าน"
+        ).click().run()
+
+        self.assertEqual(app.session_state["reset_email"], "member@example.com")
+        self.assertEqual(
+            app.session_state["reset_redirect_url"],
+            "https://getexpert-ai.streamlit.app",
+        )
+        self.assertTrue(any("ระบบได้ส่งลิงก์" in item.value for item in app.success))
+
+    def test_recovery_user_can_set_new_password(self) -> None:
+        app = AppTest.from_function(
+            render_reset_password_page,
+            default_timeout=10,
+        ).run()
+
+        next(
+            item for item in app.text_input if item.label == "รหัสผ่านใหม่"
+        ).set_value("new-password")
+        next(
+            item
+            for item in app.text_input
+            if item.label == "ยืนยันรหัสผ่านใหม่"
+        ).set_value("new-password")
+        next(
+            item
+            for item in app.button
+            if item.label == "บันทึกรหัสผ่านใหม่"
+        ).click().run()
+
+        self.assertEqual(
+            app.session_state["recovery_token_used"],
+            "recovery-token",
+        )
+        self.assertTrue(app.session_state["reset_password_saved"])
+        self.assertNotIn(
+            "password_recovery_access_token",
+            app.session_state,
+        )
+        self.assertTrue(any("ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว" in item.value for item in app.success))
+
     def test_guest_cannot_access_change_password_page(self) -> None:
         app = AppTest.from_function(
             render_change_password_for_guest,
@@ -118,7 +213,10 @@ class AuthUiTests(unittest.TestCase):
         app = AppTest.from_file("app.py", default_timeout=10).run()
 
         self.assertFalse(app.exception)
-        self.assertEqual(tuple(app.radio[0].options), ("เข้าสู่ระบบ", "สมัครสมาชิก"))
+        self.assertEqual(
+            tuple(app.radio[0].options),
+            ("เข้าสู่ระบบ", "สมัครสมาชิก", "ลืมรหัสผ่าน"),
+        )
         self.assertNotIn("หน้าแรก", app.radio[0].options)
 
         app.radio[0].set_value("สมัครสมาชิก").run()

@@ -86,6 +86,15 @@ class SupabaseService:
         )
         self._raise_for_error(response)
 
+    def request_password_reset(self, email: str, redirect_url: str) -> None:
+        response = self.client.post(
+            f"{self.url}/auth/v1/recover",
+            params={"redirect_to": redirect_url},
+            headers=self._headers(),
+            json={"email": email},
+        )
+        self._raise_for_error(response)
+
     def list_users(self, access_token: str) -> list[dict[str, Any]]:
         return self.select("users", {}, access_token)
 

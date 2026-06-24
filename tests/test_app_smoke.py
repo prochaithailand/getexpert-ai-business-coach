@@ -82,7 +82,10 @@ class AppSmokeTests(unittest.TestCase):
     def test_all_pages_render_without_exceptions(self) -> None:
         app = AppTest.from_file("app.py", default_timeout=10).run()
         self.assertFalse(app.exception)
-        self.assertEqual(tuple(app.radio[0].options), ("เข้าสู่ระบบ", "สมัครสมาชิก"))
+        self.assertEqual(
+            tuple(app.radio[0].options),
+            ("เข้าสู่ระบบ", "สมัครสมาชิก", "ลืมรหัสผ่าน"),
+        )
         app = _authenticate_app(app)
 
         app.session_state["member_profile"] = {

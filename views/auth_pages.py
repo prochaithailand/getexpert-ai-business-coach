@@ -45,6 +45,75 @@ def render_register(store: SessionUserStore) -> None:
         st.success("สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ")
 
 
+def render_forgot_password(
+    store: SessionUserStore,
+    redirect_url: str,
+) -> None:
+    st.title("ลืมรหัสผ่าน")
+    st.markdown(
+        "<p class='section-lead'>กรอกอีเมลที่ใช้สมัคร ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่</p>",
+        unsafe_allow_html=True,
+    )
+    with st.form("forgot_password_form"):
+        email = st.text_input("อีเมล", placeholder="name@example.com")
+        submitted = st.form_submit_button(
+            "ส่งลิงก์รีเซ็ตรหัสผ่าน",
+            type="primary",
+            width="stretch",
+        )
+    if not submitted:
+        return
+    try:
+        store.request_password_reset(email, redirect_url)
+    except (RuntimeError, ValueError) as error:
+        st.error(str(error))
+        return
+    st.success(
+        "หากอีเมลนี้มีบัญชีอยู่ในระบบ ระบบได้ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว "
+        "กรุณาตรวจสอบกล่องจดหมายและอีเมลขยะ"
+    )
+
+
+def render_reset_password(
+    store: SessionUserStore,
+    recovery_access_token: str,
+) -> None:
+    st.title("ตั้งรหัสผ่านใหม่")
+    st.markdown(
+        "<p class='section-lead'>กำหนดรหัสผ่านใหม่สำหรับบัญชี GetExpert ของคุณ</p>",
+        unsafe_allow_html=True,
+    )
+    with st.form("reset_password_form", clear_on_submit=True):
+        new_password = st.text_input(
+            "รหัสผ่านใหม่",
+            type="password",
+            help="รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
+        )
+        confirm_password = st.text_input(
+            "ยืนยันรหัสผ่านใหม่",
+            type="password",
+        )
+        submitted = st.form_submit_button(
+            "บันทึกรหัสผ่านใหม่",
+            type="primary",
+            width="stretch",
+        )
+    if not submitted:
+        return
+    try:
+        store.reset_password(
+            recovery_access_token,
+            new_password,
+            confirm_password,
+        )
+    except (PermissionError, RuntimeError, ValueError) as error:
+        st.error(str(error))
+        return
+    st.session_state.pop("password_recovery_access_token", None)
+    st.session_state["password_reset_completed"] = True
+    st.success("ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่")
+
+
 def render_logout(store: SessionUserStore, user: AppUser) -> None:
     st.title("ออกจากระบบ")
     st.info(f"คุณกำลังใช้งานในชื่อ {user.full_name}")

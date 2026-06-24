@@ -3,6 +3,7 @@ APP_SUBTITLE = "ระบบ AI เพื่อความสำเร็จข
 APP_VERSION = "2.0"
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+DEFAULT_PASSWORD_RESET_REDIRECT_URL = "https://getexpert-ai.streamlit.app"
 
 NAV_ITEMS = (
     "หน้าแรก",

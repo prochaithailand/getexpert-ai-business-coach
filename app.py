@@ -7,7 +7,14 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from config import APP_SUBTITLE, APP_TITLE, DEFAULT_EMBEDDING_MODEL, DEFAULT_OPENAI_MODEL, NAV_ITEMS
+from config import (
+    APP_SUBTITLE,
+    APP_TITLE,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    DEFAULT_PASSWORD_RESET_REDIRECT_URL,
+    NAV_ITEMS,
+)
 from services.coach_service import LocalCoachService
 from services.auth_service import SessionUserStore
 from services.knowledge_service import KnowledgeService
@@ -32,9 +39,11 @@ from views.team_page import render_team_management
 from views.team_dashboard_page import render_team_dashboard, render_team_invite_confirmation
 from views.auth_pages import (
     render_account_settings,
+    render_forgot_password,
     render_login,
     render_logout,
     render_register,
+    render_reset_password,
     render_user_management,
 )
 
@@ -46,6 +55,40 @@ st.set_page_config(
 )
 
 apply_global_styles()
+
+
+def capture_supabase_recovery_redirect() -> None:
+    components.html(
+        """
+        <script>
+        const parentWindow = window.parent;
+        const hash = parentWindow.location.hash;
+        if (hash && hash.length > 1) {
+          const values = new URLSearchParams(hash.slice(1));
+          const type = values.get("type");
+          const accessToken = values.get("access_token");
+          const errorDescription = values.get("error_description");
+          if (type === "recovery" && accessToken) {
+            const url = new URL(parentWindow.location.href);
+            url.hash = "";
+            url.searchParams.set("recovery_type", "recovery");
+            url.searchParams.set("recovery_access_token", accessToken);
+            parentWindow.location.replace(url.toString());
+          } else if (errorDescription) {
+            const url = new URL(parentWindow.location.href);
+            url.hash = "";
+            url.searchParams.set("recovery_error", errorDescription);
+            parentWindow.location.replace(url.toString());
+          }
+        }
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
+capture_supabase_recovery_redirect()
 
 
 def get_setting(name: str, default: str = "") -> str:
@@ -419,6 +462,26 @@ authenticated_user = user_store.current_user()
 invite_code = str(st.query_params.get("invite_code", "")).strip()
 if invite_code:
     st.session_state["pending_invite_code"] = invite_code
+recovery_type = str(st.query_params.get("recovery_type", "")).strip()
+recovery_access_token = str(
+    st.query_params.get("recovery_access_token", "")
+).strip()
+if recovery_type == "recovery" and recovery_access_token:
+    st.session_state["password_recovery_access_token"] = recovery_access_token
+    st.query_params.pop("recovery_type", None)
+    st.query_params.pop("recovery_access_token", None)
+recovery_error = str(st.query_params.get("recovery_error", "")).strip()
+if recovery_error:
+    st.session_state["password_recovery_error"] = recovery_error
+    st.query_params.pop("recovery_error", None)
+
+pending_recovery_token = str(
+    st.session_state.get("password_recovery_access_token", "")
+).strip()
+if pending_recovery_token:
+    render_mobile_menu_toggle()
+    render_reset_password(user_store, pending_recovery_token)
+    st.stop()
 
 if authenticated_user is None:
     with st.sidebar:
@@ -434,14 +497,30 @@ if authenticated_user is None:
             """,
             unsafe_allow_html=True,
         )
-        auth_page = st.radio("เมนูบัญชี", ("เข้าสู่ระบบ", "สมัครสมาชิก"), label_visibility="collapsed")
+        auth_page = st.radio(
+            "เมนูบัญชี",
+            ("เข้าสู่ระบบ", "สมัครสมาชิก", "ลืมรหัสผ่าน"),
+            label_visibility="collapsed",
+        )
     render_mobile_menu_toggle()
+    if recovery_message := st.session_state.pop("password_recovery_error", None):
+        st.error("ลิงก์รีเซ็ตรหัสผ่านไม่ถูกต้องหรือหมดอายุ กรุณาขอลิงก์ใหม่")
+    if st.session_state.pop("password_reset_completed", False):
+        st.success("ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว กรุณาเข้าสู่ระบบ")
     if st.session_state.get("pending_invite_code"):
         st.info("กรุณาเข้าสู่ระบบหรือสมัครสมาชิกก่อนยืนยันคำเชิญเข้าร่วมทีม")
     if auth_page == "เข้าสู่ระบบ":
         render_login(user_store)
-    else:
+    elif auth_page == "สมัครสมาชิก":
         render_register(user_store)
+    else:
+        render_forgot_password(
+            user_store,
+            get_setting(
+                "PASSWORD_RESET_REDIRECT_URL",
+                DEFAULT_PASSWORD_RESET_REDIRECT_URL,
+            ),
+        )
     st.stop()
 
 repository = SessionProfileRepository(st.session_state)

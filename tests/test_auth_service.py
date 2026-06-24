@@ -142,6 +142,45 @@ class AuthServiceTests(unittest.TestCase):
             "access-token", "new-password"
         )
 
+    def test_forgot_and_reset_password_use_supabase_auth_only(self) -> None:
+        supabase = Mock()
+        supabase.enabled = True
+        store = SessionUserStore({}, supabase)
+
+        with self.assertRaisesRegex(ValueError, "อีเมล"):
+            store.request_password_reset(
+                "not-an-email",
+                "https://getexpert-ai.streamlit.app",
+            )
+
+        store.request_password_reset(
+            "Member@Example.com",
+            "https://getexpert-ai.streamlit.app",
+        )
+        supabase.request_password_reset.assert_called_once_with(
+            "member@example.com",
+            "https://getexpert-ai.streamlit.app",
+        )
+
+        with self.assertRaisesRegex(PermissionError, "ไม่ถูกต้องหรือหมดอายุ"):
+            store.reset_password("", "new-password", "new-password")
+        with self.assertRaisesRegex(ValueError, "ไม่ตรงกัน"):
+            store.reset_password(
+                "recovery-token",
+                "new-password",
+                "different-password",
+            )
+
+        store.reset_password(
+            "recovery-token",
+            "new-password",
+            "new-password",
+        )
+        supabase.update_password.assert_called_once_with(
+            "recovery-token",
+            "new-password",
+        )
+
     def test_local_leader_list_contains_only_leaders(self) -> None:
         state = {}
         store = SessionUserStore(state)

@@ -100,12 +100,7 @@ class SessionUserStore:
             self.state.pop(key, None)
 
     def change_password(self, new_password: str, confirm_password: str) -> None:
-        if not new_password:
-            raise ValueError("กรุณากรอกรหัสผ่านใหม่")
-        if len(new_password) < 8:
-            raise ValueError("รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร")
-        if new_password != confirm_password:
-            raise ValueError("รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน")
+        _validate_new_password(new_password, confirm_password)
         authenticated = self.state.get(AUTH_USER_KEY, {})
         if not authenticated:
             raise PermissionError("กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน")
@@ -116,6 +111,41 @@ class SessionUserStore:
             raise PermissionError("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่")
         try:
             self.supabase.update_password(access_token, new_password)
+        except Exception as error:
+            from services.supabase_service import SupabaseError
+
+            if isinstance(error, SupabaseError):
+                raise ValueError(_password_error_message(str(error))) from error
+            raise
+
+    def request_password_reset(self, email: str, redirect_url: str) -> None:
+        normalized_email = _normalize_email(email)
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", normalized_email):
+            raise ValueError("กรุณาระบุอีเมลให้ถูกต้อง")
+        if not self.supabase or not self.supabase.enabled:
+            raise RuntimeError("การรีเซ็ตรหัสผ่านใช้งานได้เมื่อเชื่อมต่อ Supabase เท่านั้น")
+        try:
+            self.supabase.request_password_reset(normalized_email, redirect_url)
+        except Exception as error:
+            from services.supabase_service import SupabaseError
+
+            if isinstance(error, SupabaseError):
+                raise ValueError("ไม่สามารถส่งอีเมลรีเซ็ตรหัสผ่านได้ กรุณาลองใหม่อีกครั้ง") from error
+            raise
+
+    def reset_password(
+        self,
+        recovery_access_token: str,
+        new_password: str,
+        confirm_password: str,
+    ) -> None:
+        _validate_new_password(new_password, confirm_password)
+        if not recovery_access_token:
+            raise PermissionError("ลิงก์รีเซ็ตรหัสผ่านไม่ถูกต้องหรือหมดอายุ")
+        if not self.supabase or not self.supabase.enabled:
+            raise RuntimeError("การรีเซ็ตรหัสผ่านใช้งานได้เมื่อเชื่อมต่อ Supabase เท่านั้น")
+        try:
+            self.supabase.update_password(recovery_access_token, new_password)
         except Exception as error:
             from services.supabase_service import SupabaseError
 
@@ -302,3 +332,12 @@ def _password_error_message(message: str) -> str:
     if "jwt" in normalized or "session" in normalized or "token" in normalized:
         return "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่"
     return "ไม่สามารถเปลี่ยนรหัสผ่านได้ กรุณาลองใหม่อีกครั้ง"
+
+
+def _validate_new_password(new_password: str, confirm_password: str) -> None:
+    if not new_password:
+        raise ValueError("กรุณากรอกรหัสผ่านใหม่")
+    if len(new_password) < 8:
+        raise ValueError("รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร")
+    if new_password != confirm_password:
+        raise ValueError("รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน")
