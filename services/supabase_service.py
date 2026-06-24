@@ -132,15 +132,44 @@ class SupabaseService:
             return
         teams = self.select("teams", {}, token)
         state["teams"] = {
-            row["team_id"]: Team.from_dict(row.get("team_data", {})).to_dict()
+            str(row["team_id"]).strip().upper(): Team.from_dict({
+                **row.get("team_data", {}),
+                "team_id": str(row["team_id"]).strip().upper(),
+            }).to_dict()
             for row in teams if row.get("team_id") and row.get("team_data")
         }
         team_objects = {
             team_id: Team.from_dict(team_data) for team_id, team_data in state["teams"].items()
         }
         profile_rows = self.select("member_profiles", {}, token)
-        if not profile_rows:
-            return
+        if not any(str(row.get("email", "")).casefold() == email for row in profile_rows):
+            assigned_team = next(
+                (
+                    team
+                    for team in team_objects.values()
+                    if (
+                        str(authenticated.get("role", "")) == "Leader"
+                        and team.leader_email.casefold() == email
+                    )
+                ),
+                None,
+            )
+            if not assigned_team:
+                return
+            initial_profile = MemberProfile(
+                name=str(authenticated.get("full_name", "")),
+                role=str(authenticated.get("role", "Member")),
+                team_name=assigned_team.name if assigned_team else "",
+                team_id=assigned_team.team_id if assigned_team else "",
+                team_leader=assigned_team.leader if assigned_team else "",
+            )
+            self.upsert("member_profiles", {
+                "email": email,
+                "team_id": initial_profile.team_id or None,
+                "profile_data": initial_profile.to_dict(),
+                "updated_at": _now(),
+            }, "email", token)
+            profile_rows = self.select("member_profiles", {}, token)
         state["member_profiles_by_user"] = {}
         state["member_profiles_by_key"] = {}
         state.setdefault("workplan_by_member", {})
@@ -149,13 +178,37 @@ class SupabaseService:
         for row in profile_rows:
             row_email = str(row.get("email", "")).casefold()
             profile = MemberProfile.from_dict(row.get("profile_data", {}))
-            canonical_team_id = str(row.get("team_id") or "")
+            if row_email == email:
+                profile = replace(profile, role=str(authenticated.get("role", profile.role)))
+            canonical_team_id = str(row.get("team_id") or "").strip().upper()
+            recovered_leader_team = (
+                row_email == email
+                and profile.role == "Leader"
+                and not canonical_team_id
+            )
+            if recovered_leader_team:
+                assigned_team = next(
+                    (
+                        team
+                        for team in team_objects.values()
+                        if team.leader_email.casefold() == email
+                    ),
+                    None,
+                )
+                canonical_team_id = assigned_team.team_id if assigned_team else ""
             canonical_team = team_objects.get(canonical_team_id)
             if canonical_team:
                 profile = replace(
                     profile, team_id=canonical_team.team_id,
                     team_name=canonical_team.name, team_leader=canonical_team.leader,
                 )
+                if recovered_leader_team:
+                    self.upsert("member_profiles", {
+                        "email": email,
+                        "team_id": canonical_team.team_id,
+                        "profile_data": profile.to_dict(),
+                        "updated_at": _now(),
+                    }, "email", token)
             elif not canonical_team_id:
                 profile = replace(profile, team_id="", team_name="", team_leader="")
             key = member_progress_key(profile)

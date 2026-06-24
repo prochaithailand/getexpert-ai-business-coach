@@ -28,6 +28,12 @@ def build_team_dashboard(
         return None
     team = SessionTeamRepository(state).get(selected_team_id)
     profiles = SessionProfileRepository(state).list_by_team(selected_team_id)
+    if (
+        current_profile
+        and current_profile.team_id.strip().upper() == selected_team_id
+        and all(profile.name != current_profile.name for profile in profiles)
+    ):
+        profiles.append(current_profile)
     if not profiles:
         return None
 
@@ -55,6 +61,7 @@ def build_team_dashboard(
         "team_id": selected_team_id,
         "team_name": team.name if team else (current_profile.team_name if current_profile else ""),
         "team_leader": team.leader if team else (current_profile.team_leader if current_profile else ""),
+        "team_leader_email": team.leader_email if team else "",
         "total_members": len(members),
         "active_members": sum(1 for member in members if member["active"]),
         "total_pp": total_pp,

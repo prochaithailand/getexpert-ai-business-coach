@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime, timezone
+import secrets
 from typing import Any
 
 from models import AppUser, MemberProfile, Team
@@ -79,7 +81,15 @@ class SessionTeamRepository:
             raise KeyError("ไม่พบทีมที่ต้องการกำหนดหัวหน้า")
         updated_team = self.update(
             team.team_id,
-            Team(team.name, team.team_id, user.full_name, team.primary_sponsor, team.notes),
+            Team(
+                team.name,
+                team.team_id,
+                user.full_name,
+                team.primary_sponsor,
+                team.notes,
+                user.email.casefold(),
+                team.invite_code,
+            ),
         )
         self._assign_user(updated_team, user, "Leader")
         return updated_team
@@ -91,6 +101,56 @@ class SessionTeamRepository:
         if any(user.role == "Admin" for user in users):
             raise ValueError("ไม่สามารถกำหนดบัญชีผู้ดูแลระบบเป็นสมาชิกทีม")
         return [self._assign_user(team, user, None) for user in users]
+
+    def generate_invite_code(self, team_id: str, leader: AppUser) -> Team:
+        team = self.get(team_id)
+        if not team:
+            raise KeyError("ไม่พบทีมที่ต้องการสร้างลิงก์คำเชิญ")
+        raw_profile = self.state.get("member_profile", {})
+        current_profile = (
+            raw_profile
+            if isinstance(raw_profile, MemberProfile)
+            else MemberProfile.from_dict(raw_profile)
+        )
+        assigned_by_profile = _team_id(current_profile.team_id) == team.team_id
+        if leader.role != "Leader" or (
+            team.leader_email
+            and team.leader_email.casefold() != leader.email.casefold()
+        ) or (not team.leader_email and not assigned_by_profile):
+            raise PermissionError("คุณไม่มีสิทธิ์สร้างลิงก์คำเชิญสำหรับทีมนี้")
+        invite_code = team.invite_code or (
+            secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:12].upper()
+        )
+        return self.update(
+            team.team_id,
+            replace(team, leader_email=leader.email.casefold(), invite_code=invite_code),
+        )
+
+    def find_by_invite_code(self, invite_code: str) -> Team | None:
+        normalized = invite_code.strip().casefold()
+        if not normalized:
+            return None
+        return next(
+            (team for team in self.list() if team.invite_code.casefold() == normalized),
+            None,
+        )
+
+    def join_with_invite(self, invite_code: str, user: AppUser) -> MemberProfile:
+        if user.role != "Member":
+            raise PermissionError("คำเชิญเข้าร่วมทีมใช้ได้สำหรับบัญชีสมาชิกเท่านั้น")
+        team = self.find_by_invite_code(invite_code)
+        if not team:
+            raise KeyError("ไม่พบคำเชิญเข้าร่วมทีม หรือคำเชิญไม่ถูกต้อง")
+        assigned = self._assign_user(team, user, "Member")
+        joined = replace(
+            assigned,
+            sponsor=team.leader_email or assigned.sponsor,
+            invited_by=team.leader_email,
+            joined_at=datetime.now(timezone.utc).isoformat(),
+            role="Member",
+        )
+        self._store_assigned_profile(user, joined, "Member")
+        return joined
 
     def ensure_profile_team(self, profile: MemberProfile | None) -> Team | None:
         if not profile or not profile.team_id:
@@ -179,18 +239,30 @@ class SessionTeamRepository:
             team_leader=team.leader,
             role=role or profile.role,
         )
+        self._store_assigned_profile(user, assigned, role)
+        return assigned
+
+    def _store_assigned_profile(
+        self,
+        user: AppUser,
+        assigned: MemberProfile,
+        role: str | None,
+    ) -> None:
+        email = user.email.casefold()
+        raw = self.state.get("member_profiles_by_user", {}).get(email)
+        previous = MemberProfile.from_dict(raw) if raw else None
         profiles_by_user = dict(self.state.get("member_profiles_by_user", {}))
         profiles_by_user[email] = assigned.to_dict()
         self.state["member_profiles_by_user"] = profiles_by_user
 
         registry = dict(self.state.get("member_profiles_by_key", {}))
-        if raw:
-            registry.pop(member_progress_key(profile), None)
+        if previous:
+            registry.pop(member_progress_key(previous), None)
         registry[member_progress_key(assigned)] = assigned.to_dict()
         self.state["member_profiles_by_key"] = registry
 
         users = dict(self.state.get(USER_STORE_KEY, {}))
-        assigned_user = replace(user, role=role or user.role)
+        assigned_user = replace(user, role=role or assigned.role)
         users[email] = assigned_user.to_dict()
         self.state[USER_STORE_KEY] = users
         if str(self.state.get("authenticated_user", {}).get("email", "")).casefold() == email:
@@ -207,7 +279,6 @@ class SessionTeamRepository:
                 assigned,
                 role,
             )
-        return assigned
 
 
 def normalize_team(team: Team) -> Team:
@@ -226,6 +297,8 @@ def normalize_team(team: Team) -> Team:
         leader=leader,
         primary_sponsor=team.primary_sponsor.strip(),
         notes=team.notes.strip(),
+        leader_email=team.leader_email.strip().casefold(),
+        invite_code=team.invite_code.strip(),
     )
 
 

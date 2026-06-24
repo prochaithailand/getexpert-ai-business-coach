@@ -64,6 +64,7 @@ class TeamDashboardServiceTests(unittest.TestCase):
         assert snapshot is not None
         self.assertEqual(snapshot["team_name"], "ทีมทะเบียนกลาง")
         self.assertEqual(snapshot["team_leader"], "ผู้นำทะเบียน")
+        self.assertEqual(snapshot["team_leader_email"], "")
         self.assertEqual(snapshot["total_members"], 2)
         self.assertEqual(snapshot["active_members"], 2)
         self.assertEqual(snapshot["total_pp"], 150)

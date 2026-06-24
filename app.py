@@ -29,7 +29,7 @@ from views.workplan_page import render_business_workplan
 from views.dashboard_page import render_member_dashboard
 from views.prospect_page import render_prospect_manager
 from views.team_page import render_team_management
-from views.team_dashboard_page import render_team_dashboard
+from views.team_dashboard_page import render_team_dashboard, render_team_invite_confirmation
 from views.auth_pages import render_login, render_logout, render_register, render_user_management
 
 
@@ -410,6 +410,9 @@ if not supabase and bootstrap_email and bootstrap_password:
         get_setting("PROTOTYPE_ADMIN_NAME", "ผู้ดูแลระบบ GetExpert"),
     )
 authenticated_user = user_store.current_user()
+invite_code = str(st.query_params.get("invite_code", "")).strip()
+if invite_code:
+    st.session_state["pending_invite_code"] = invite_code
 
 if authenticated_user is None:
     with st.sidebar:
@@ -427,6 +430,8 @@ if authenticated_user is None:
         )
         auth_page = st.radio("เมนูบัญชี", ("เข้าสู่ระบบ", "สมัครสมาชิก"), label_visibility="collapsed")
     render_mobile_menu_toggle()
+    if st.session_state.get("pending_invite_code"):
+        st.info("กรุณาเข้าสู่ระบบหรือสมัครสมาชิกก่อนยืนยันคำเชิญเข้าร่วมทีม")
     if auth_page == "เข้าสู่ระบบ":
         render_login(user_store)
     else:
@@ -439,6 +444,9 @@ if profile and profile.role != authenticated_user.role:
     repository.save(replace(profile, role=authenticated_user.role))
     profile = repository.get()
 coach = get_coach_service()
+pending_invite_code = str(st.session_state.get("pending_invite_code", "")).strip()
+if pending_invite_code:
+    render_team_invite_confirmation(authenticated_user, pending_invite_code)
 
 with st.sidebar:
     st.markdown(

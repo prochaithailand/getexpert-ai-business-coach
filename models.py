@@ -18,6 +18,8 @@ class MemberProfile:
     team_leader: str = ""
     sponsor: str = ""
     role: str = "Member"
+    invited_by: str = ""
+    joined_at: str = ""
 
     @property
     def is_complete(self) -> bool:
@@ -39,6 +41,8 @@ class Team:
     leader: str
     primary_sponsor: str = ""
     notes: str = ""
+    leader_email: str = ""
+    invite_code: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

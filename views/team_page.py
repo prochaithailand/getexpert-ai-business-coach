@@ -138,7 +138,13 @@ def _render_edit_form(repository: SessionTeamRepository) -> None:
         st.rerun()
     if submitted:
         try:
-            updated = repository.update(original_id, Team(name, team_id, team.leader, primary_sponsor, notes))
+            updated = repository.update(
+                original_id,
+                Team(
+                    name, team_id, team.leader, primary_sponsor, notes,
+                    team.leader_email, team.invite_code,
+                ),
+            )
         except (KeyError, ValueError) as error:
             st.warning(str(error))
             return

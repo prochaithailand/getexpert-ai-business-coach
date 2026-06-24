@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from html import escape
 from typing import Any
 
@@ -35,11 +36,28 @@ def render_team_dashboard(
         unsafe_allow_html=True,
     )
     selected_team_id = _select_team(profile, authenticated_user)
-    snapshot = build_team_dashboard(st.session_state, profile, selected_team_id)
+    dashboard_profile = profile
+    if (
+        authenticated_user
+        and authenticated_user.role == "Leader"
+        and selected_team_id
+        and (not profile or not profile.team_id)
+    ):
+        assigned_team = SessionTeamRepository(st.session_state).get(selected_team_id)
+        if assigned_team:
+            dashboard_profile = replace(
+                profile or MemberProfile(name=authenticated_user.full_name, role="Leader"),
+                team_name=assigned_team.name,
+                team_id=assigned_team.team_id,
+                team_leader=assigned_team.leader,
+                role="Leader",
+            )
+    snapshot = build_team_dashboard(st.session_state, dashboard_profile, selected_team_id)
     if snapshot is None:
-        st.info(EMPTY_TEAM_MESSAGE)
+        st.info("ยังไม่มีทีมที่ได้รับมอบหมาย กรุณาติดต่อผู้ดูแลระบบ")
         return
     _render_summary(snapshot)
+    _render_invite_link(authenticated_user, snapshot)
     _render_member_table(snapshot)
     _render_pipeline(snapshot)
     _render_progress_distribution(snapshot)
@@ -52,7 +70,19 @@ def _select_team(
     authenticated_user: AppUser | None,
 ) -> str | None:
     if not authenticated_user or authenticated_user.role != "Admin":
-        return profile.team_id if profile else None
+        if profile and profile.team_id:
+            return profile.team_id
+        if authenticated_user and authenticated_user.role == "Leader":
+            assigned = next(
+                (
+                    team
+                    for team in SessionTeamRepository(st.session_state).list()
+                    if team.leader_email.casefold() == authenticated_user.email.casefold()
+                ),
+                None,
+            )
+            return assigned.team_id if assigned else None
+        return None
     teams = SessionTeamRepository(st.session_state).list()
     if not teams:
         return None
@@ -68,6 +98,7 @@ def _render_summary(snapshot: dict[str, Any]) -> None:
         ("ชื่อทีม", escape(snapshot["team_name"] or "ยังไม่ระบุ")),
         ("รหัสทีม", escape(snapshot["team_id"])),
         ("หัวหน้าทีม", escape(snapshot["team_leader"] or "ยังไม่ระบุ")),
+        ("อีเมลหัวหน้าทีม", escape(snapshot["team_leader_email"] or "ยังไม่ระบุ")),
     ))
     _card_row((
         ("จำนวนสมาชิกทั้งหมด", f"{snapshot['total_members']} คน"),
@@ -78,6 +109,62 @@ def _render_summary(snapshot: dict[str, Any]) -> None:
     _card_row((("จำนวนผู้มุ่งหวังทั้งหมด", f"{snapshot['total_prospects']} ราย"),))
     _card_row(tuple((f"ผู้มุ่งหวังเกรด {grade}", f"{grades[grade]} ราย") for grade in ("A", "B", "C", "D")))
     _card_row((("นัดหมายแล้ว", f"{snapshot['appointments']} ราย"), ("สมัครแล้ว", f"{snapshot['signed_up']} ราย")))
+
+
+def _render_invite_link(
+    authenticated_user: AppUser | None,
+    snapshot: dict[str, Any],
+) -> None:
+    if not authenticated_user or authenticated_user.role != "Leader":
+        return
+    repository = SessionTeamRepository(st.session_state)
+    team = repository.get(snapshot["team_id"])
+    if not team:
+        return
+    st.subheader("ลิงก์เชิญสมาชิกเข้าทีม")
+    if not team.invite_code:
+        if st.button("สร้างลิงก์เชิญเข้าทีม", type="primary"):
+            try:
+                team = repository.generate_invite_code(team.team_id, authenticated_user)
+            except (KeyError, PermissionError) as error:
+                st.warning(str(error))
+                return
+            st.rerun()
+        return
+    invite_link = f"https://getexpert-ai.streamlit.app/?invite_code={team.invite_code}"
+    st.code(invite_link, language=None)
+    st.caption(f"ลิงก์นี้สำหรับทีม {team.name} และสร้างโดย {authenticated_user.email}")
+
+
+def render_team_invite_confirmation(
+    authenticated_user: AppUser,
+    invite_code: str,
+) -> bool:
+    repository = SessionTeamRepository(st.session_state)
+    team = repository.find_by_invite_code(invite_code)
+    if not team:
+        st.warning("ไม่พบคำเชิญเข้าร่วมทีม หรือคำเชิญไม่ถูกต้อง")
+        return False
+    if authenticated_user.role != "Member":
+        st.info("คำเชิญเข้าร่วมทีมใช้ได้สำหรับบัญชีสมาชิกเท่านั้น")
+        return False
+    st.info(f"คุณได้รับคำเชิญเข้าร่วมทีม {team.name}")
+    confirm, cancel = st.columns(2)
+    if confirm.button("ยืนยันเข้าร่วมทีม", type="primary", key="confirm_team_invite"):
+        try:
+            repository.join_with_invite(invite_code, authenticated_user)
+        except (KeyError, PermissionError) as error:
+            st.warning(str(error))
+            return False
+        st.session_state.pop("pending_invite_code", None)
+        st.query_params.pop("invite_code", None)
+        st.success(f"เข้าร่วมทีม {team.name} เรียบร้อยแล้ว")
+        st.rerun()
+    if cancel.button("ยกเลิก", key="cancel_team_invite"):
+        st.session_state.pop("pending_invite_code", None)
+        st.query_params.pop("invite_code", None)
+        st.rerun()
+    return True
 
 
 def _card_row(cards: tuple[tuple[str, str], ...]) -> None:
@@ -98,7 +185,11 @@ def _render_member_table(snapshot: dict[str, Any]) -> None:
             "ชื่อสมาชิก": member["name"],
             "บทบาท": {"Member": "สมาชิก", "Leader": "ผู้นำ", "Admin": "ผู้ดูแลระบบ"}.get(member["role"], member["role"]),
             "คะแนน PP": member["pp"],
+            "แผน 30 วัน": f"{member['progress']:.1f}%",
             "จำนวนผู้มุ่งหวัง": member["prospects"],
+            "สปอนเซอร์": f"{member['goals']['sponsor']['actual']:.0f}/{member['goals']['sponsor']['target']:.0f}",
+            "คะแนนทีม": f"{member['goals']['team_points']['actual']:.0f}/{member['goals']['team_points']['target']:.0f}",
+            "รายได้": f"{member['goals']['income']['actual']:.0f}/{member['goals']['income']['target']:.0f}",
         }
         for member in snapshot["members"]
     ]

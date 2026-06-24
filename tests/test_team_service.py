@@ -103,6 +103,33 @@ class TeamServiceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             repository.assign_members("TEAM-TEST", [admin])
 
+    def test_leader_generates_invite_and_member_joins_without_role_change(self) -> None:
+        leader = AppUser("leader@example.com", "หัวหน้าทีม", "Leader")
+        member = AppUser("member@example.com", "สมาชิกใหม่", "Member")
+        state = {
+            USER_STORE_KEY: {
+                leader.email: leader.to_dict(),
+                member.email: member.to_dict(),
+            },
+            "teams": {
+                "TEAM-INVITE": Team(
+                    "ทีมคำเชิญ", "TEAM-INVITE", leader.full_name,
+                    leader_email=leader.email,
+                ).to_dict(),
+            },
+        }
+        repository = SessionTeamRepository(state)
+
+        invited_team = repository.generate_invite_code("TEAM-INVITE", leader)
+        joined = repository.join_with_invite(invited_team.invite_code, member)
+
+        self.assertTrue(invited_team.invite_code)
+        self.assertEqual(joined.team_id, "TEAM-INVITE")
+        self.assertEqual(joined.role, "Member")
+        self.assertEqual(joined.invited_by, leader.email)
+        self.assertTrue(joined.joined_at)
+        self.assertEqual(state[USER_STORE_KEY][member.email]["role"], "Member")
+
 
 if __name__ == "__main__":
     unittest.main()
