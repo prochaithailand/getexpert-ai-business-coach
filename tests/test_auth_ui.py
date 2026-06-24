@@ -5,9 +5,41 @@ from streamlit.testing.v1 import AppTest
 
 from services.auth_service import AUTH_USER_KEY, USER_STORE_KEY
 from services.settings_service import SupabaseConfig
+from models import AppUser
+from views.auth_pages import _role_actions_for
 
 
 class AuthUiTests(unittest.TestCase):
+    def test_admin_user_management_exposes_partner_actions_by_current_role(self) -> None:
+        admin = AppUser("admin@example.com", "ผู้ดูแล", "Admin")
+        member_actions = _role_actions_for(
+            AppUser("member@example.com", "สมาชิก", "Member"), admin
+        )
+        leader_actions = _role_actions_for(
+            AppUser("leader@example.com", "ผู้นำ", "Leader"), admin
+        )
+        partner_actions = _role_actions_for(
+            AppUser("partner@example.com", "Partner", "Partner"), admin
+        )
+        other_admin_actions = _role_actions_for(
+            AppUser("other-admin@example.com", "ผู้ดูแลอื่น", "Admin"), admin
+        )
+        current_admin_actions = _role_actions_for(admin, admin)
+
+        self.assertIn(("แต่งตั้งเป็น Partner", "Partner"), member_actions)
+        self.assertIn(("แต่งตั้งเป็น Partner", "Partner"), leader_actions)
+        self.assertIn(
+            ("ถอด Partner และปรับเป็นผู้นำ", "Leader"),
+            partner_actions,
+        )
+        self.assertIn(
+            ("ถอด Partner และปรับเป็นสมาชิก", "Member"),
+            partner_actions,
+        )
+        self.assertIn(("ลดสิทธิ์เป็นผู้นำ", "Leader"), other_admin_actions)
+        self.assertIn(("ลดสิทธิ์เป็นสมาชิก", "Member"), other_admin_actions)
+        self.assertEqual(current_admin_actions, ())
+
     @patch("services.settings_service.load_supabase_config", return_value=SupabaseConfig())
     def test_guest_sees_only_login_and_registration_then_can_sign_in(self, _mock_load) -> None:
         app = AppTest.from_file("app.py", default_timeout=10).run()

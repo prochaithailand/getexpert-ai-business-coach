@@ -114,6 +114,15 @@ class AuthServiceTests(unittest.TestCase):
             "",
         )
 
+    def test_admin_cannot_demote_own_account(self) -> None:
+        admin = AppUser("admin@example.com", "ผู้ดูแล", "Admin", "hash")
+        store = SessionUserStore(
+            {USER_STORE_KEY: {admin.email: admin.to_dict()}}
+        )
+
+        with self.assertRaises(PermissionError):
+            store.set_role(admin.email, admin.email, "Member")
+
     def test_local_leader_list_contains_only_leaders(self) -> None:
         state = {}
         store = SessionUserStore(state)

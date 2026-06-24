@@ -58,7 +58,11 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
     if user.role != "Admin":
         st.warning(UNAUTHORIZED_MESSAGE)
         return
-    st.markdown("<p class='section-lead'>กำหนดสิทธิ์ผู้นำและผู้ดูแลระบบโดยผู้ดูแลระบบที่มีอยู่แล้ว</p>", unsafe_allow_html=True)
+    st.markdown(
+        "<p class='section-lead'>กำหนดสิทธิ์สมาชิก ผู้นำ Partner และผู้ดูแลระบบ "
+        "โดยผู้ดูแลระบบที่มีอยู่แล้ว</p>",
+        unsafe_allow_html=True,
+    )
     for account in store.list_users():
         role_label = {
             "Member": "สมาชิก",
@@ -69,33 +73,66 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
         with st.container(border=True):
             details, action = st.columns([3, 2])
             rate = 15 if account.role == "Partner" else 8 if account.role == "Leader" else 0
-            badge = f"  \nReferral Rate: **{rate}%**" if rate else ""
             details.markdown(
-                f"**{account.full_name}**  \n{account.email}  \nบทบาท: **{role_label}**{badge}"
+                f"**{account.full_name}**  \n{account.email}  \n"
+                f"บทบาท: **{role_label}**  \nReferral Rate: **{rate}%**"
             )
-            role_options = ("Member", "Leader", "Partner", "Admin")
-            selected_role = action.selectbox(
-                "กำหนดบทบาท",
-                role_options,
-                index=role_options.index(account.role),
-                key=f"role_select_{account.email}",
-            )
-            if action.button(
-                "บันทึกบทบาท",
-                key=f"set_role_{account.email}",
-                width="stretch",
-                disabled=selected_role == account.role,
-            ):
-                try:
-                    updated = store.set_role(user.email, account.email, selected_role)
-                except (PermissionError, KeyError, ValueError, SupabaseError) as error:
-                    st.warning(str(error))
+            for label, target_role in _role_actions_for(account, user):
+                if action.button(
+                    label,
+                    key=f"set_role_{target_role}_{account.email}",
+                    width="stretch",
+                    type="primary" if target_role == "Partner" else "secondary",
+                ):
+                    _apply_role_change(store, user, account, target_role)
                     return
-                updated_label = {
-                    "Member": "สมาชิก",
-                    "Leader": "ผู้นำ",
-                    "Partner": "Partner",
-                    "Admin": "ผู้ดูแลระบบ",
-                }[updated.role]
-                st.success(f"ปรับบทบาทของ {updated.full_name} เป็น {updated_label} แล้ว")
-                st.rerun()
+
+
+def _role_actions_for(
+    account: AppUser,
+    current_admin: AppUser,
+) -> tuple[tuple[str, str], ...]:
+    if account.role == "Member":
+        return (
+            ("เลื่อนเป็นผู้นำ", "Leader"),
+            ("แต่งตั้งเป็น Partner", "Partner"),
+            ("เลื่อนเป็นผู้ดูแลระบบ", "Admin"),
+        )
+    if account.role == "Leader":
+        return (
+            ("แต่งตั้งเป็น Partner", "Partner"),
+            ("เลื่อนเป็นผู้ดูแลระบบ", "Admin"),
+            ("ลดเป็นสมาชิก", "Member"),
+        )
+    if account.role == "Partner":
+        return (
+            ("ถอด Partner และปรับเป็นผู้นำ", "Leader"),
+            ("ถอด Partner และปรับเป็นสมาชิก", "Member"),
+        )
+    if account.role == "Admin" and account.email != current_admin.email:
+        return (
+            ("ลดสิทธิ์เป็นผู้นำ", "Leader"),
+            ("ลดสิทธิ์เป็นสมาชิก", "Member"),
+        )
+    return ()
+
+
+def _apply_role_change(
+    store: SessionUserStore,
+    actor: AppUser,
+    account: AppUser,
+    target_role: str,
+) -> None:
+    try:
+        updated = store.set_role(actor.email, account.email, target_role)
+    except (PermissionError, KeyError, ValueError, SupabaseError) as error:
+        st.warning(str(error))
+        return
+    updated_label = {
+        "Member": "สมาชิก",
+        "Leader": "ผู้นำ",
+        "Partner": "Partner",
+        "Admin": "ผู้ดูแลระบบ",
+    }[updated.role]
+    st.success(f"ปรับบทบาทของ {updated.full_name} เป็น {updated_label} แล้ว")
+    st.rerun()

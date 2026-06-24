@@ -186,6 +186,8 @@ class SessionUserStore:
         target = self.get(target_email)
         if not target:
             raise KeyError("ไม่พบบัญชีผู้ใช้")
+        if target.email == actor.email and target.role == "Admin" and next_role != "Admin":
+            raise PermissionError("ผู้ดูแลระบบไม่สามารถลดสิทธิ์บัญชีของตนเองได้")
         authenticated = self.state.get(AUTH_USER_KEY, {})
         if self.supabase and self.supabase.enabled:
             token = str(authenticated.get("access_token", ""))
