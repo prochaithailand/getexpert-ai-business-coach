@@ -18,7 +18,7 @@ class ProspectParserServiceTests(unittest.TestCase):
         self.assertEqual(draft.name, "สมชาย")
         self.assertEqual(draft.age, 42)
         self.assertEqual(draft.occupation, "เจ้าของร้านกาแฟ")
-        self.assertEqual(draft.phone, "0812345678")
+        self.assertEqual(draft.phone, "081-234-5678")
         self.assertEqual(draft.province, "ปทุมธานี")
         self.assertEqual(draft.area, "รังสิต")
         self.assertEqual(draft.status, "นัดหมายแล้ว")
@@ -35,6 +35,51 @@ class ProspectParserServiceTests(unittest.TestCase):
         self.assertEqual(draft.pain_point, "มีเวลาให้ครอบครัว")
         self.assertEqual(draft.previous_experience, "ขายสินค้าออนไลน์")
         self.assertEqual(draft.category, "B")
+
+    def test_parses_compact_thai_retired_teacher_example(self) -> None:
+        draft = parse_prospect_text(
+            "ชื่อพี่แดงกัลยาประเทืองพิน พื้นที่จังหวัดชุมพร อายุ 74 "
+            "ปีเป็นอดีตข้าราชการครูเกษียณเบอร์โทร 085-954-9632"
+        )
+
+        self.assertEqual(draft.name, "พี่แดงกัลยาประเทืองพิน")
+        self.assertEqual(draft.age, 74)
+        self.assertEqual(draft.province, "ชุมพร")
+        self.assertEqual(draft.area, "")
+        self.assertEqual(draft.occupation, "อดีตข้าราชการครูเกษียณ")
+        self.assertEqual(draft.phone, "085-954-9632")
+        self.assertEqual(draft.category, "")
+
+    def test_parses_compact_name_age_occupation_and_phone(self) -> None:
+        draft = parse_prospect_text(
+            "ชื่อสมศรีอายุ45ปีเป็นเจ้าของร้านกาแฟเบอร์081 222 3344"
+        )
+
+        self.assertEqual(draft.name, "สมศรี")
+        self.assertEqual(draft.age, 45)
+        self.assertEqual(draft.occupation, "เจ้าของร้านกาแฟ")
+        self.assertEqual(draft.phone, "081 222 3344")
+
+    def test_parses_compact_name_province_and_interest(self) -> None:
+        draft = parse_prospect_text(
+            "ชื่อคุณเอกอยู่จังหวัดเชียงใหม่สนใจรายได้เสริม"
+        )
+
+        self.assertEqual(draft.name, "คุณเอก")
+        self.assertEqual(draft.province, "เชียงใหม่")
+        self.assertEqual(draft.interest, "รายได้เสริม")
+
+    def test_parses_compact_phone_line_and_appointment(self) -> None:
+        draft = parse_prospect_text(
+            "ชื่อมานีเบอร์0899988877LINE ID:manee.workนัดคุยพรุ่งนี้",
+            today=date(2026, 6, 25),
+        )
+
+        self.assertEqual(draft.name, "มานี")
+        self.assertEqual(draft.phone, "0899988877")
+        self.assertEqual(draft.line_id, "manee.work")
+        self.assertEqual(draft.status, "นัดหมายแล้ว")
+        self.assertEqual(draft.next_follow_up, "2026-06-26")
 
     def test_incomplete_text_does_not_invent_personal_data(self) -> None:
         draft = parse_prospect_text("สนใจเรียนรู้ธุรกิจเพิ่มเติม")

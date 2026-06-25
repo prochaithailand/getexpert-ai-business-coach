@@ -38,29 +38,36 @@ class RuleBasedProspectParser:
         if not source:
             return ProspectDraft()
 
-        name = _extract(source, r"(?:ชื่อ|คุณ)\s*([ก-๙A-Za-z][^,.;\n]*?)(?=\s+(?:อายุ|เป็น|อาชีพ|เบอร์|โทร|LINE|ไลน์|อยู่|จังหวัด|สนใจ|ต้องการ|นัด|เกรด|สถานะ)|[,.;]|$)")
-        age_text = _extract(source, r"อายุ\s*(\d{1,3})\s*(?:ปี)?")
-        age = int(age_text) if age_text and 0 < int(age_text) <= 120 else 0
-        phone_text = _extract(
-            source, r"(?:เบอร์(?:โทร)?|โทร(?:ศัพท์)?)\s*[:\-]?\s*(0[\d\-\s]{8,12})"
+        working = source
+        phone_text, working = _extract_and_remove(
+            working,
+            r"(?:เบอร์โทร(?:ศัพท์)?|เบอร์|โทร(?:ศัพท์)?)\s*[:\-]?\s*"
+            r"(0\d{2}(?:[\-\s]?\d{3})(?:[\-\s]?\d{4}))",
         )
         phone = _normalize_phone(phone_text)
-        line_id = _extract(
-            source,
-            r"(?:LINE\s*ID|ไลน์(?:ไอดี)?|ไลน์\s*ID)\s*[:\-]?\s*([A-Za-z0-9_.@\-]+)",
+        age_text, working = _extract_and_remove(
+            working, r"อายุ\s*(\d{1,3})\s*(?:ปี)?"
+        )
+        age = int(age_text) if age_text and 0 < int(age_text) <= 120 else 0
+        province, area, working = _extract_location(working)
+        line_id, working = _extract_and_remove(
+            working,
+            r"(?:LINE\s*ID|LINE|ไลน์(?:ไอดี)?|ไลน์\s*ID)\s*[:\-]?\s*"
+            r"([A-Za-z0-9_.@\-]+)",
             flags=re.IGNORECASE,
         )
+        name = _extract(
+            working,
+            r"(?:ชื่อ|คุณ)\s*([ก-๙A-Za-z][^,.;\n]*?)"
+            r"(?=(?:อายุ|อาชีพ|เป็น|ทำงาน|เกษียณ|อยู่|พื้นที่|จังหวัด|เบอร์|โทร|"
+            r"LINE|ไลน์|สนใจ|ปัญหา|ต้องการ|เคย|นัด|เกรด|สถานะ)|[,.;]|$)",
+        )
         occupation = _extract(
-            source,
-            r"(?:อาชีพ\s*[:\-]?\s*|เป็น\s*)([^,.;]*?)(?=\s+(?:อยู่|จังหวัด|เบอร์|โทร|LINE|ไลน์|สนใจ|ต้องการ|นัด|เกรด|สถานะ)|[,.;]|$)",
-        )
-        province = _extract(
-            source,
-            r"จังหวัด\s*[:\-]?\s*([ก-๙A-Za-z ]+?)(?=\s+(?:อยู่|พื้นที่|สนใจ|ต้องการ|นัด|เบอร์|โทร|LINE|ไลน์|เกรด|สถานะ)|[,.;]|$)",
-        )
-        area = _extract(
-            source,
-            r"(?:อยู่|พื้นที่)\s*[:\-]?\s*([ก-๙A-Za-z ]+?)(?=\s+(?:จังหวัด|สนใจ|ต้องการ|นัด|เบอร์|โทร|LINE|ไลน์|เกรด|สถานะ)|[,.;]|$)",
+            working,
+            r"(?:อาชีพ\s*[:\-]?\s*|เป็น\s*|ทำงาน\s*[:\-]?\s*|"
+            r"(?<![ก-๙])เกษียณ\s*)([^,.;]*?)"
+            r"(?=(?:เบอร์|โทร|LINE|ไลน์|จังหวัด|พื้นที่|อยู่|สนใจ|ปัญหา|ต้องการ|"
+            r"เคย|นัด|เกรด|สถานะ)|[,.;]|$)",
         )
         income_text = _extract(
             source,
@@ -120,9 +127,46 @@ def _extract(text: str, pattern: str, flags: int = 0) -> str:
     return match.group(1).strip(" :-") if match else ""
 
 
+def _extract_and_remove(
+    text: str,
+    pattern: str,
+    flags: int = 0,
+) -> tuple[str, str]:
+    match = re.search(pattern, text, flags)
+    if not match:
+        return "", text
+    value = match.group(1).strip(" :-")
+    remaining = f"{text[:match.start()]} {text[match.end():]}"
+    return value, " ".join(remaining.split())
+
+
+def _extract_location(text: str) -> tuple[str, str, str]:
+    markers = (
+        r"อายุ|อาชีพ|เป็น|ทำงาน|เกษียณ|เบอร์|โทร|LINE|ไลน์|สนใจ|ปัญหา|"
+        r"ต้องการ|เคย|นัด|เกรด|สถานะ"
+    )
+    province = ""
+    remaining = text
+    for prefix in (r"พื้นที่\s*จังหวัด", r"อยู่\s*จังหวัด", r"จังหวัด"):
+        province, candidate = _extract_and_remove(
+            remaining,
+            rf"{prefix}\s*([ก-๙A-Za-z]+?)(?=(?:{markers})|[,.;]|\s|$)",
+        )
+        if province:
+            remaining = candidate
+            break
+
+    area_pattern = (
+        rf"(?:พื้นที่|อยู่)\s*([ก-๙A-Za-z]+?)"
+        rf"(?=(?:{markers})|[,.;]|\s|$)"
+    )
+    area, remaining = _extract_and_remove(remaining, area_pattern)
+    return province, area, remaining
+
+
 def _normalize_phone(value: str) -> str:
     digits = re.sub(r"\D", "", value)
-    return digits if 9 <= len(digits) <= 10 and digits.startswith("0") else ""
+    return value.strip() if len(digits) == 10 and digits.startswith("0") else ""
 
 
 def _extract_status(text: str) -> str:
