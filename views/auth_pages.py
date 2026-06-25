@@ -266,19 +266,24 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
 
 def _render_openai_diagnostic(health: dict[str, object]) -> None:
     st.subheader("สถานะระบบ OpenAI")
-    st.markdown("### Success Rate (Last 100 Requests)")
-    success_rate = int(health.get("response_success_rate", 0) or 0)
-    success_count = int(health.get("response_success_count", 0) or 0)
-    failure_count = int(health.get("response_failure_count", 0) or 0)
-    request_count = int(health.get("response_request_count", 0) or 0)
-    with st.container(border=True):
-        st.metric("Success Rate (Last 100)", f"{success_rate}%")
-        st.caption(
-            f"{success_count} Success | {failure_count} Failure "
-            f"| {request_count}/100 Requests"
-        )
+    success_rate = int(
+        health.get("success_rate", health.get("response_success_rate", 0)) or 0
+    )
+    success_count = int(
+        health.get("success_count", health.get("response_success_count", 0)) or 0
+    )
+    failure_count = int(
+        health.get("failure_count", health.get("response_failure_count", 0)) or 0
+    )
+    request_count = int(
+        health.get("total_requests", health.get("response_request_count", 0)) or 0
+    )
     configured = "ใช่" if health.get("api_key_configured") else "ไม่ใช่"
     labels = (
+        ("Success Rate (Last 100 Requests)", f"{success_rate}%"),
+        ("Success", success_count),
+        ("Failure", failure_count),
+        ("Total Requests", request_count),
         ("ตั้งค่า API key แล้ว", configured),
         ("แหล่งการตั้งค่า", health.get("config_source") or "missing"),
         ("API key", health.get("masked_key") or "-"),

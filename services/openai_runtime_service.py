@@ -286,6 +286,10 @@ def get_openai_diagnostic_health(
             "response_success_count": success_count,
             "response_failure_count": failure_count,
             "response_success_rate": success_rate,
+            "total_requests": len(history),
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "success_rate": success_rate,
         }
     )
     return health

@@ -217,6 +217,10 @@ class OpenAIRuntimeServiceTests(unittest.TestCase):
         self.assertEqual(health["response_success_count"], 98)
         self.assertEqual(health["response_failure_count"], 2)
         self.assertEqual(health["response_success_rate"], 98)
+        self.assertEqual(health["total_requests"], 100)
+        self.assertEqual(health["success_count"], 98)
+        self.assertEqual(health["failure_count"], 2)
+        self.assertEqual(health["success_rate"], 98)
 
     def test_embeddings_do_not_change_response_success_rate(self) -> None:
         state = {}
