@@ -10,6 +10,30 @@ from services.workplan_service import add_contact, create_default_workplan, repl
 
 
 class SupabaseServiceTests(unittest.TestCase):
+    def test_sign_up_sends_marketing_opt_in_as_auth_metadata(self) -> None:
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"user": {"id": "user-1"}})
+
+        service = SupabaseService(
+            "https://project.supabase.co",
+            "anon-key",
+            httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+
+        service.sign_up(
+            "member@example.com",
+            "strong-pass",
+            "สมาชิกใหม่",
+            marketing_email_opt_in=True,
+        )
+
+        payload = requests[0].read().decode()
+        self.assertIn('"marketing_email_opt_in":true', payload)
+        self.assertNotIn("subscription_status", payload)
+
     def test_admin_subscription_update_writes_only_subscription_columns(self) -> None:
         requests = []
         service = SupabaseService(

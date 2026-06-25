@@ -225,9 +225,21 @@ class AuthUiTests(unittest.TestCase):
         role = next(item for item in app.text_input if item.label == "บทบาท")
         self.assertTrue(role.disabled)
         self.assertEqual(role.value, "สมาชิก")
+        marketing_opt_in = next(
+            item
+            for item in app.checkbox
+            if item.label.startswith("ฉันต้องการรับบทความ")
+        )
+        self.assertFalse(marketing_opt_in.value)
+        marketing_opt_in.check()
         next(item for item in app.button if item.label == "สมัครสมาชิก").click().run()
 
         self.assertEqual(app.session_state[USER_STORE_KEY]["new@example.com"]["role"], "Member")
+        self.assertTrue(
+            app.session_state[USER_STORE_KEY]["new@example.com"][
+                "marketing_email_opt_in"
+            ]
+        )
         app.radio[0].set_value("เข้าสู่ระบบ").run()
         next(item for item in app.text_input if item.label == "อีเมล").set_value("new@example.com")
         next(item for item in app.text_input if item.label == "รหัสผ่าน").set_value("secure-pass")

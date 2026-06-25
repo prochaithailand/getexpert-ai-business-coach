@@ -22,6 +22,7 @@ class AuthServiceTests(unittest.TestCase):
             "member@example.com",
             "strong-pass",
             "สมาชิกใหม่",
+            marketing_email_opt_in=True,
         )
 
         authenticated = state[AUTH_USER_KEY]
@@ -33,6 +34,13 @@ class AuthServiceTests(unittest.TestCase):
         self.assertTrue(user.trial_used)
         self.assertTrue(user.trial_started_at)
         self.assertTrue(user.trial_ends_at)
+        self.assertTrue(user.marketing_email_opt_in)
+        supabase.sign_up.assert_called_once_with(
+            "member@example.com",
+            "strong-pass",
+            "สมาชิกใหม่",
+            marketing_email_opt_in=True,
+        )
 
     def test_registration_defaults_to_member_and_hashes_password(self) -> None:
         state = {}
@@ -42,6 +50,7 @@ class AuthServiceTests(unittest.TestCase):
 
         self.assertEqual(user.email, "member@example.com")
         self.assertEqual(user.role, "Member")
+        self.assertFalse(user.marketing_email_opt_in)
         self.assertNotEqual(state[USER_STORE_KEY][user.email]["password_hash"], "strong-pass")
         self.assertTrue(state[USER_STORE_KEY][user.email]["password_hash"].startswith("pbkdf2_sha256$"))
 

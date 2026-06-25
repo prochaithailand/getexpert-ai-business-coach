@@ -70,6 +70,9 @@ def normalize_subscription_user(user: AppUser) -> AppUser:
         trial_started_at=str(getattr(user, "trial_started_at", "") or ""),
         trial_ends_at=str(getattr(user, "trial_ends_at", "") or ""),
         trial_used=bool(getattr(user, "trial_used", False)),
+        marketing_email_opt_in=bool(
+            getattr(user, "marketing_email_opt_in", False)
+        ),
     )
 
 

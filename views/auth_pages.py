@@ -42,9 +42,23 @@ def render_register(store: SessionUserStore) -> None:
         password = st.text_input("รหัสผ่าน", type="password", help="อย่างน้อย 8 ตัวอักษร")
         st.text_input("บทบาท", value="สมาชิก", disabled=True)
         submitted = st.form_submit_button("สมัครสมาชิก", type="primary", width="stretch")
+        st.caption(
+            "เมื่อสมัครใช้งาน GetExpert คุณยินยอมให้ระบบส่งอีเมลที่เกี่ยวข้องกับบัญชีของคุณ "
+            "เช่น การยืนยันการสมัคร การแจ้งสถานะทดลองใช้ฟรี การชำระเงิน และการเปิดใช้งานบริการ"
+        )
+        marketing_email_opt_in = st.checkbox(
+            "ฉันต้องการรับบทความ เทคนิคการใช้ AI เพื่อพัฒนาธุรกิจ ข่าวสาร "
+            "และข้อเสนอจาก GetExpert ทางอีเมล",
+            value=False,
+        )
     if submitted:
         try:
-            store.register(email, password, full_name)
+            store.register(
+                email,
+                password,
+                full_name,
+                marketing_email_opt_in=marketing_email_opt_in,
+            )
         except (ValueError, SupabaseError) as error:
             st.warning(str(error))
             return

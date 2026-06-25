@@ -79,6 +79,7 @@ class AppUser:
     trial_started_at: str = ""
     trial_ends_at: str = ""
     trial_used: bool = False
+    marketing_email_opt_in: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

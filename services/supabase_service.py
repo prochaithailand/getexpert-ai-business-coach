@@ -48,11 +48,24 @@ class SupabaseService:
                 raise SupabaseError(self._error_message(response))
         return tuple(missing)
 
-    def sign_up(self, email: str, password: str, full_name: str) -> dict[str, Any]:
+    def sign_up(
+        self,
+        email: str,
+        password: str,
+        full_name: str,
+        marketing_email_opt_in: bool = False,
+    ) -> dict[str, Any]:
         response = self.client.post(
             f"{self.url}/auth/v1/signup",
             headers=self._headers(),
-            json={"email": email, "password": password, "data": {"full_name": full_name}},
+            json={
+                "email": email,
+                "password": password,
+                "data": {
+                    "full_name": full_name,
+                    "marketing_email_opt_in": bool(marketing_email_opt_in),
+                },
+            },
         )
         self._raise_for_error(response)
         return response.json()
@@ -101,6 +114,9 @@ class SupabaseService:
             "trial_started_at": role_row.get("trial_started_at") or "",
             "trial_ends_at": role_row.get("trial_ends_at") or "",
             "trial_used": bool(role_row.get("trial_used", False)),
+            "marketing_email_opt_in": bool(
+                role_row.get("marketing_email_opt_in", False)
+            ),
             "user_id": auth_user.get("id", ""),
             "access_token": token,
             "refresh_token": payload.get("refresh_token", ""),
