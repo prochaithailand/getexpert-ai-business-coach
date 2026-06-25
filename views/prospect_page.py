@@ -5,7 +5,9 @@ from typing import Any
 
 import streamlit as st
 
-from models import MemberProfile
+from models import AppUser, MemberProfile
+from services.prospect_parser_service import parse_prospect_text
+from services.subscription_service import has_active_subscription
 from services.workplan_service import (
     CONTACT_STATUSES,
     CONTACT_TYPES,
@@ -19,7 +21,14 @@ from services.workplan_service import (
 )
 
 
-def render_prospect_manager(profile: MemberProfile | None) -> None:
+AI_DRAFT_KEY = "prospect_ai_draft"
+AI_INPUT_KEY = "prospect_ai_input"
+
+
+def render_prospect_manager(
+    profile: MemberProfile | None,
+    authenticated_user: AppUser | None = None,
+) -> None:
     st.title("ผู้มุ่งหวัง")
     st.markdown(
         "<p class='section-lead'>จัดการรายชื่อ วางแผนติดตาม และพัฒนาผู้มุ่งหวังอย่างเป็นระบบ</p>",
@@ -34,6 +43,7 @@ def render_prospect_manager(profile: MemberProfile | None) -> None:
     if message := st.session_state.pop("prospect_flash_message", None):
         st.success(message)
     _render_summary(workplan["contacts"])
+    _render_ai_add_form(profile, repository, workplan, authenticated_user)
     _render_add_form(profile, repository, workplan)
     _render_priority_preview(workplan["contacts"])
     _render_prospect_table(profile, repository, workplan)
@@ -54,6 +64,128 @@ def _render_summary(contacts: list[dict[str, Any]]) -> None:
         columns = st.columns(len(group))
         for column, (label, value) in zip(columns, group):
             column.metric(label, f"{value} ราย")
+
+
+def _render_ai_add_form(
+    profile: MemberProfile,
+    repository: SessionWorkplanRepository,
+    workplan: dict[str, Any],
+    authenticated_user: AppUser | None,
+) -> None:
+    st.subheader("เพิ่มผู้มุ่งหวังด้วย AI")
+    st.caption("พิมพ์ข้อมูลตามธรรมชาติ ระบบจะช่วยจัดลงแบบฟอร์มให้ตรวจสอบก่อนบันทึก")
+    if not _can_use_ai_prospect_entry(authenticated_user):
+        st.warning("ฟีเจอร์นี้ใช้ได้เฉพาะสมาชิกที่เปิดใช้งานแล้ว")
+        return
+    if st.session_state.pop("_clear_prospect_ai_input", False):
+        st.session_state.pop(AI_INPUT_KEY, None)
+
+    raw_text = st.text_area(
+        "ข้อมูลผู้มุ่งหวัง",
+        placeholder="ตัวอย่าง: ชื่อสมชาย อายุ 42 ปี เป็นเจ้าของร้านกาแฟ อยู่รังสิต สนใจรายได้เสริม นัดคุยวันเสาร์นี้",
+        key=AI_INPUT_KEY,
+    )
+    parse_column, clear_column = st.columns(2)
+    if parse_column.button("ให้ AI ช่วยจัดข้อมูล", type="primary", width="stretch"):
+        if not raw_text.strip():
+            st.warning("กรุณาพิมพ์ข้อมูลผู้มุ่งหวังก่อน")
+        else:
+            st.session_state[AI_DRAFT_KEY] = parse_prospect_text(raw_text).to_dict()
+            st.rerun()
+    if clear_column.button("ล้างข้อมูล", width="stretch", key="clear_ai_prospect"):
+        _clear_ai_draft()
+        st.rerun()
+
+    draft = st.session_state.get(AI_DRAFT_KEY)
+    if not isinstance(draft, dict):
+        return
+    st.info("กรุณาตรวจสอบและแก้ไขข้อมูลให้ถูกต้องก่อนยืนยันบันทึก")
+    with st.form("prospect_ai_preview_form"):
+        first, second, third, fourth = st.columns(4)
+        name = first.text_input("ชื่อ", value=str(draft.get("name", "")))
+        age = second.number_input(
+            "อายุ", min_value=0, max_value=120, value=int(draft.get("age", 0) or 0)
+        )
+        occupation = third.text_input("อาชีพ", value=str(draft.get("occupation", "")))
+        phone = fourth.text_input("เบอร์โทร", value=str(draft.get("phone", "")))
+        line_id = first.text_input("LINE ID", value=str(draft.get("line_id", "")))
+        province = second.text_input("จังหวัด", value=str(draft.get("province", "")))
+        area = third.text_input("พื้นที่", value=str(draft.get("area", "")))
+        income = fourth.number_input(
+            "รายได้ต่อเดือน (บาท)",
+            min_value=0.0,
+            value=float(draft.get("income", 0) or 0),
+            step=1000.0,
+        )
+        status_value = str(draft.get("status", CONTACT_STATUSES[0]))
+        category_value = str(draft.get("category", "D")).upper()
+        status = first.selectbox(
+            "สถานะ",
+            CONTACT_STATUSES,
+            index=CONTACT_STATUSES.index(status_value) if status_value in CONTACT_STATUSES else 0,
+        )
+        category = second.selectbox(
+            "เกรด A/B/C/D",
+            CONTACT_TYPES,
+            index=CONTACT_TYPES.index(category_value) if category_value in CONTACT_TYPES else 3,
+        )
+        follow_up = third.date_input(
+            "นัดหมายถัดไป",
+            value=_date_value(str(draft.get("next_follow_up", ""))),
+            format="DD/MM/YYYY",
+        )
+        interest = st.text_input("ความสนใจ", value=str(draft.get("interest", "")))
+        pain_point = st.text_area(
+            "ปัญหา / ความต้องการ", value=str(draft.get("pain_point", ""))
+        )
+        previous_experience = st.text_area(
+            "ประสบการณ์เดิม", value=str(draft.get("previous_experience", ""))
+        )
+        notes = st.text_area("หมายเหตุ", value=str(draft.get("notes", "")))
+        confirmed = st.form_submit_button(
+            "ยืนยันบันทึกผู้มุ่งหวัง", type="primary", width="stretch"
+        )
+    if not confirmed:
+        return
+    if not _can_use_ai_prospect_entry(authenticated_user):
+        st.error("บัญชีของคุณยังไม่พร้อมใช้งานฟีเจอร์นี้")
+        return
+    if not name.strip():
+        st.warning("กรุณาระบุชื่อผู้มุ่งหวังก่อนบันทึก")
+        return
+    updated = add_contact(
+        workplan,
+        {
+            "name": name,
+            "age": age,
+            "occupation": occupation,
+            "phone": phone,
+            "line_id": line_id,
+            "province": province,
+            "area": area,
+            "income": income,
+            "status": status,
+            "category": category,
+            "interest": interest,
+            "pain_point": pain_point,
+            "previous_experience": previous_experience,
+            "next_follow_up": follow_up,
+            "notes": notes,
+        },
+    )
+    repository.save(profile, updated)
+    _clear_ai_draft()
+    st.session_state.prospect_flash_message = f"บันทึกผู้มุ่งหวัง {name} เรียบร้อยแล้ว"
+    st.rerun()
+
+
+def _can_use_ai_prospect_entry(user: AppUser | None) -> bool:
+    return bool(user and has_active_subscription(user))
+
+
+def _clear_ai_draft() -> None:
+    st.session_state.pop(AI_DRAFT_KEY, None)
+    st.session_state["_clear_prospect_ai_input"] = True
 
 
 def _render_add_form(

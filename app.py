@@ -618,7 +618,7 @@ elif page == "แผนปฏิบัติการ 30 วัน":
 elif page == "เครื่องมือสร้างคอนเทนต์":
     render_content_creator(repository.get(), coach)
 elif page == "ผู้มุ่งหวัง":
-    render_prospect_manager(repository.get())
+    render_prospect_manager(repository.get(), authenticated_user)
 elif page == "Workplan ธุรกิจ":
     render_business_workplan(repository.get())
 elif page == "คลังความรู้":

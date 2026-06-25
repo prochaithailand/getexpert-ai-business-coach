@@ -153,6 +153,11 @@ def normalize_contact(contact: dict[str, Any]) -> dict[str, Any]:
         "phone": str(contact.get("phone", "")).strip(),
         "category": category if category in CONTACT_TYPES else "D",
         "province": str(contact.get("province", "")).strip(),
+        "area": str(contact.get("area", "")).strip(),
+        "line_id": str(contact.get("line_id", "")).strip(),
+        "interest": str(contact.get("interest", "")).strip(),
+        "pain_point": str(contact.get("pain_point", "")).strip(),
+        "previous_experience": str(contact.get("previous_experience", "")).strip(),
         "notes": str(contact.get("notes", "")).strip(),
         "next_follow_up": _normalize_date(contact.get("next_follow_up")),
     }
