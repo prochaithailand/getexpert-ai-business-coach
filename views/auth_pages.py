@@ -5,6 +5,7 @@ import streamlit as st
 from models import AppUser
 from services.auth_service import SessionUserStore
 from services.permissions import UNAUTHORIZED_MESSAGE
+from services.openai_runtime_service import get_openai_health
 from services.supabase_service import SupabaseError
 from services.subscription_service import (
     effective_subscription_status,
@@ -184,6 +185,7 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
         "โดยผู้ดูแลระบบที่มีอยู่แล้ว</p>",
         unsafe_allow_html=True,
     )
+    _render_openai_diagnostic(get_openai_health())
     for account in store.list_users():
         account = normalize_subscription_user(account)
         role_label = {
@@ -225,6 +227,26 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
                         return
                     st.success(f"อัปเดตสถานะการใช้งานของ {account.full_name} แล้ว")
                     st.rerun()
+
+
+def _render_openai_diagnostic(health: dict[str, object]) -> None:
+    st.subheader("สถานะระบบ OpenAI")
+    configured = "ใช่" if health.get("api_key_configured") else "ไม่ใช่"
+    labels = (
+        ("ตั้งค่า API key แล้ว", configured),
+        ("Responses model", health.get("responses_model") or "-"),
+        ("Embedding model", health.get("embedding_model") or "-"),
+        ("ผลล่าสุด", health.get("last_result") or "ยังไม่มีข้อมูล"),
+        ("การทำงานล่าสุด", health.get("last_operation") or "-"),
+        ("ประเภทข้อผิดพลาดล่าสุด", health.get("last_error_type") or "-"),
+        ("HTTP status ล่าสุด", health.get("last_status_code") or "-"),
+        ("สำเร็จล่าสุด", health.get("last_success_time") or "-"),
+        ("ล้มเหลวล่าสุด", health.get("last_failure_time") or "-"),
+        ("จำนวน retry ล่าสุด", health.get("last_retry_count", 0)),
+    )
+    with st.container(border=True):
+        for label, value in labels:
+            st.write(f"{label}: **{value}**")
 
 
 def _role_actions_for(

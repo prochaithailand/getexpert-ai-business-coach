@@ -476,6 +476,11 @@ class AppSmokeTests(unittest.TestCase):
         self.assertIn("จัดการทีม", app.radio[0].options)
         self.assertIn("Team Dashboard", app.radio[0].options)
         self.assertIn("จัดการผู้ใช้", app.radio[0].options)
+        app.radio[0].set_value("จัดการผู้ใช้").run()
+        self.assertIn(
+            "สถานะระบบ OpenAI",
+            [item.value for item in app.subheader],
+        )
 
 
 if __name__ == "__main__":

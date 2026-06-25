@@ -19,6 +19,7 @@ from services.coach_service import LocalCoachService
 from services.auth_service import SessionUserStore, recovery_params_from_query
 from services.knowledge_service import KnowledgeService
 from services.openai_coach_service import OpenAICoachService
+from services.openai_runtime_service import GLOBAL_OPENAI_STATE, OpenAIRuntimeService
 from services.profile_repository import SessionProfileRepository
 from services.permissions import visible_navigation
 from services.subscription_service import LOCKED_MESSAGE, has_active_subscription
@@ -434,13 +435,28 @@ def get_coach_service() -> LocalCoachService:
     if api_key:
         from openai import OpenAI
 
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, timeout=60.0, max_retries=0)
+        runtime = OpenAIRuntimeService(
+            GLOBAL_OPENAI_STATE,
+            api_key_configured=True,
+            responses_model=model,
+            embedding_model=embedding_model,
+        )
         knowledge_service = KnowledgeService(
             knowledge_dir,
             embedding_client=client,
             embedding_model=embedding_model,
+            openai_runtime=runtime,
         )
-        return OpenAICoachService(knowledge_service, model=model, client=client)
+        return OpenAICoachService(
+            knowledge_service, model=model, client=client, openai_runtime=runtime
+        )
+    OpenAIRuntimeService(
+        GLOBAL_OPENAI_STATE,
+        api_key_configured=False,
+        responses_model=model,
+        embedding_model=embedding_model,
+    )
     knowledge_service = KnowledgeService(knowledge_dir)
     return LocalCoachService(knowledge_service)
 

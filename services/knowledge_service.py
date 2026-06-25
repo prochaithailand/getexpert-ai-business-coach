@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from models import KnowledgeDocument, KnowledgeMatch
+from services.openai_runtime_service import OpenAIRuntimeService
 
 try:
     from pypdf import PdfReader
@@ -60,11 +61,13 @@ class KnowledgeService:
         embedding_client: Any | None = None,
         embedding_model: str = "text-embedding-3-small",
         cache_path: Path | None = None,
+        openai_runtime: OpenAIRuntimeService | None = None,
     ) -> None:
         self.knowledge_dir = knowledge_dir.resolve()
         self.embedding_client = embedding_client
         self.embedding_model = embedding_model
         self.cache_path = cache_path or self.knowledge_dir.parent / ".cache" / "knowledge_embeddings.json"
+        self.openai_runtime = openai_runtime
         self._chunks: list[KnowledgeMatch] = []
         self._embeddings: list[list[float]] = []
         self._query_embeddings: dict[str, list[float]] = {}
@@ -116,7 +119,7 @@ class KnowledgeService:
         self._ensure_embeddings()
         query_vector = self._query_embeddings.get(query)
         if query_vector is None:
-            response = self.embedding_client.embeddings.create(model=self.embedding_model, input=[query])
+            response = self._embedding_call([query])
             query_vector = list(response.data[0].embedding)
             self._query_embeddings[query] = query_vector
 
@@ -231,14 +234,20 @@ class KnowledgeService:
         self._embeddings = []
         texts = [chunk.text for chunk in self._chunks]
         for start in range(0, len(texts), 64):
-            response = self.embedding_client.embeddings.create(
-                model=self.embedding_model,
-                input=texts[start : start + 64],
-            )
+            response = self._embedding_call(texts[start : start + 64])
             self._embeddings.extend(list(item.embedding) for item in response.data)
         if len(self._embeddings) != len(self._chunks):
             raise RuntimeError("จำนวน embeddings ไม่ตรงกับจำนวนข้อความในคลังความรู้")
         self._save_cache()
+
+    def _embedding_call(self, texts: list[str]) -> Any:
+        callback = lambda: self.embedding_client.embeddings.create(
+            model=self.embedding_model,
+            input=texts,
+        )
+        if self.openai_runtime:
+            return self.openai_runtime.call("embeddings", callback)
+        return callback()
 
     @classmethod
     def clean_pdf_text(cls, text: str, filename: str = "") -> str:

@@ -9,6 +9,7 @@ from models import ActionItem, CoachAnswer, KnowledgeMatch, MemberProfile
 from services.coach_service import LocalCoachService
 from services.knowledge_service import KnowledgeService
 from services.member_activity_service import MemberActivityContext, NO_WORKPLAN_MESSAGE, is_workplan_question
+from services.openai_runtime_service import OpenAIRuntimeError, OpenAIRuntimeService
 
 
 class OpenAICoachService(LocalCoachService):
@@ -22,6 +23,7 @@ class OpenAICoachService(LocalCoachService):
         api_key: str | None = None,
         model: str = "gpt-5.4-mini",
         client: Any | None = None,
+        openai_runtime: OpenAIRuntimeService | None = None,
     ) -> None:
         super().__init__(knowledge_service)
         self.model = model
@@ -32,7 +34,12 @@ class OpenAICoachService(LocalCoachService):
                 raise ValueError("ต้องกำหนด OPENAI_API_KEY ก่อนเปิดใช้งานโค้ช AI")
             from openai import OpenAI
 
-            self.client = OpenAI(api_key=api_key)
+            self.client = OpenAI(api_key=api_key, timeout=60.0, max_retries=0)
+        self.openai_runtime = openai_runtime or OpenAIRuntimeService(
+            {},
+            api_key_configured=bool(api_key or client),
+            responses_model=model,
+        )
 
     def generate_action_plan(self, profile: MemberProfile) -> list[ActionItem]:
         instructions = """
@@ -44,7 +51,7 @@ class OpenAICoachService(LocalCoachService):
 """.strip()
         profile_context = self._profile_context(profile)
         try:
-            response = self.client.responses.create(
+            response = self._response_call(
                 model=self.model,
                 instructions=instructions,
                 input=f"จัดทำแผนเฉพาะบุคคลจากข้อมูลต่อไปนี้:\n{profile_context}",
@@ -80,7 +87,7 @@ class OpenAICoachService(LocalCoachService):
             f"{self._profile_context(profile)}\n\nบริบทจากคลังความรู้:\n{context}"
         )
         try:
-            response = self.client.responses.create(
+            response = self._response_call(
                 model=self.model,
                 instructions=instructions,
                 input=request,
@@ -104,7 +111,7 @@ class OpenAICoachService(LocalCoachService):
 **สิ่งที่ควรทำต่อใน 7 วันข้างหน้า** พร้อม bullet points 3-5 ข้อที่ชัดเจนและวัดผลได้
 """.strip()
         try:
-            response = self.client.responses.create(
+            response = self._response_call(
                 model=self.model,
                 instructions=instructions,
                 input=f"ข้อมูล Dashboard ของสมาชิก:\n{context}",
@@ -129,7 +136,7 @@ class OpenAICoachService(LocalCoachService):
 **งานที่ควรโฟกัสในสัปดาห์นี้** พร้อม bullet pointsที่ชัดเจนและวัดผลได้
 """.strip()
         try:
-            response = self.client.responses.create(
+            response = self._response_call(
                 model=self.model,
                 instructions=instructions,
                 input=f"ข้อมูล Dashboard ทีม:\n{context}",
@@ -168,7 +175,7 @@ class OpenAICoachService(LocalCoachService):
             }
         )
         try:
-            response = self.client.responses.create(
+            response = self._response_call(
                 model=self.model,
                 instructions=instructions,
                 input=messages,
@@ -259,7 +266,7 @@ class OpenAICoachService(LocalCoachService):
         )
 
         try:
-            response = self.client.responses.create(
+            response = self._response_call(
                 model=self.model,
                 instructions=instructions,
                 input=input_messages,
@@ -268,21 +275,29 @@ class OpenAICoachService(LocalCoachService):
             )
             answer = (response.output_text or "").strip()
             if not self._contains_thai(answer):
-                return CoachAnswer(
-                    self._append_source_section(
-                        "ขออภัย ระบบได้รับคำตอบที่ไม่เป็นภาษาไทย จึงไม่นำมาแสดง กรุณาลองถามใหม่อีกครั้ง",
-                        sources,
-                    ),
-                    sources,
-                )
+                raise self.openai_runtime.record_validation_failure()
             return CoachAnswer(self._append_source_section(answer, sources), sources)
-        except Exception:
+        except OpenAIRuntimeError as error:
             fallback = super().answer_question(message, profile, history, activity_context)
+            if error.category == "response_validation":
+                notice = "AI หลักตอบกลับมาแล้ว แต่ระบบไม่สามารถจัดรูปแบบคำตอบได้ จึงใช้คำตอบสำรองก่อน"
+            elif error.category in {"timeout", "connection_error", "server_error", "rate_limit"}:
+                notice = (
+                    "ขณะนี้ AI หลักตอบช้าหรือเชื่อมต่อไม่ได้ ระบบจึงใช้คำตอบสำรองจากข้อมูลภายในก่อน "
+                    "กรุณาลองใหม่อีกครั้งในภายหลัง"
+                )
+            else:
+                notice = "ขณะนี้ AI หลักยังไม่พร้อมใช้งาน ระบบจึงใช้คำตอบสำรองจากข้อมูลภายในก่อน"
             return CoachAnswer(
-                "ขณะนี้ไม่สามารถเชื่อมต่อบริการ OpenAI ได้ โค้ชจึงตอบจากข้อมูลภายในระบบแทน\n\n"
-                + fallback.answer,
+                notice + "\n\n" + fallback.answer,
                 fallback.sources,
             )
+
+    def _response_call(self, **kwargs: Any) -> Any:
+        return self.openai_runtime.call(
+            "responses",
+            lambda: self.client.responses.create(**kwargs),
+        )
 
     @staticmethod
     def _build_instructions(

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from models import KnowledgeMatch
 from services.knowledge_service import KnowledgeService
+from services.openai_runtime_service import OpenAIRuntimeService
 
 
 class FakeEmbeddings:
@@ -98,6 +99,36 @@ class KnowledgeServiceTests(unittest.TestCase):
             self.assertTrue(service.semantic_enabled)
             self.assertEqual(results[0].document_name, "คู่มือสร้างทีม")
             self.assertGreaterEqual(len(client.embeddings.calls), 2)
+
+    def test_embedding_failure_records_health_and_uses_lexical_fallback(self) -> None:
+        class FailingEmbeddings:
+            def create(self, **_kwargs):
+                raise ConnectionError("network unavailable")
+
+        state = {}
+        runtime = OpenAIRuntimeService(state, max_retries=0, sleep=lambda _: None)
+        client = SimpleNamespace(embeddings=FailingEmbeddings())
+        service = KnowledgeService(
+            Path("knowledge"),
+            embedding_client=client,
+            openai_runtime=runtime,
+        )
+        service._indexed = True
+        service._chunks = [
+            KnowledgeMatch(
+                "คู่มือ CRM",
+                "การพัฒนาธุรกิจ",
+                1,
+                "การสร้างรายชื่อผู้มุ่งหวังและติดตามลูกค้าอย่างสม่ำเสมอ",
+                0,
+            )
+        ]
+
+        results = service.search_text("สร้างรายชื่อผู้มุ่งหวัง")
+
+        self.assertTrue(results)
+        self.assertEqual(runtime.health()["last_operation"], "embeddings")
+        self.assertEqual(runtime.health()["last_error_type"], "connection_error")
 
     def test_pdf_cleaning_removes_filename_noise_and_duplicate_lines(self) -> None:
         raw = """

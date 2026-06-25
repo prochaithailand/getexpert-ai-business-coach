@@ -109,7 +109,7 @@ class OpenAICoachServiceTests(unittest.TestCase):
 
         result = service.answer_question("เริ่มต้นอย่างไร", self.profile)
 
-        self.assertIn("คำตอบที่ไม่เป็นภาษาไทย", result.answer)
+        self.assertIn("ไม่สามารถจัดรูปแบบคำตอบได้", result.answer)
         self.assertNotIn("Start by", result.answer)
         self.assertIn("**แหล่งข้อมูลอ้างอิง**", result.answer)
 
@@ -194,7 +194,7 @@ class OpenAICoachServiceTests(unittest.TestCase):
 
         result = service.answer_question("วิธีสร้างรายชื่อ", self.profile)
 
-        self.assertIn("ไม่สามารถเชื่อมต่อบริการ OpenAI", result.answer)
+        self.assertIn("AI หลักยังไม่พร้อมใช้งาน", result.answer)
         self.assertIn("การสร้างรายชื่อผู้มุ่งหวัง", result.answer)
         self.assertEqual(result.sources, ("หนังสือ 5 โมดูลธุรกิจ MLM",))
 
