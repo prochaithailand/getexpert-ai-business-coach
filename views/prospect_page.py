@@ -23,6 +23,28 @@ from services.workplan_service import (
 
 AI_DRAFT_KEY = "prospect_ai_draft"
 AI_INPUT_KEY = "prospect_ai_input"
+PROSPECT_SEARCH_FIELDS = (
+    "name",
+    "phone",
+    "province",
+    "area",
+    "occupation",
+    "status",
+    "category",
+    "notes",
+    "line_id",
+    "interest",
+    "pain_point",
+    "previous_experience",
+)
+PROSPECT_STATUS_FILTERS = {
+    "ทั้งหมด": "",
+    "ยังไม่ติดต่อ": "ยังไม่ติดต่อ",
+    "ติดต่อแล้ว": "ติดต่อแล้ว",
+    "นัดหมาย": "นัดหมายแล้ว",
+    "สมัครแล้ว": "สมัครแล้ว",
+    "ปฏิเสธ": "ไม่สนใจ",
+}
 
 
 def render_prospect_manager(
@@ -257,6 +279,11 @@ def _render_prospect_table(
     if not workplan["contacts"]:
         st.info("ยังไม่มีผู้มุ่งหวัง กรุณาเพิ่มรายชื่อจากแบบฟอร์มด้านบน")
         return
+    search_query = st.text_input(
+        "ค้นหาผู้มุ่งหวัง",
+        placeholder="ค้นหาด้วยชื่อ เบอร์โทร จังหวัด อาชีพ หรือหมายเหตุ",
+        key="prospect_search_query",
+    )
     filter_left, filter_right = st.columns(2)
     grade_filter = filter_left.selectbox(
         "กรองตามเกรด",
@@ -265,18 +292,20 @@ def _render_prospect_table(
     )
     status_filter = filter_right.selectbox(
         "กรองตามสถานะ",
-        ("ทั้งหมด", *CONTACT_STATUSES),
+        tuple(PROSPECT_STATUS_FILTERS),
         key="prospect_status_filter",
     )
-    prospects = [
-        prospect
-        for prospect in workplan["contacts"]
-        if (grade_filter == "ทั้งหมด" or prospect["category"] == grade_filter)
-        and (status_filter == "ทั้งหมด" or prospect["status"] == status_filter)
-    ]
-    st.caption(f"แสดง {len(prospects)} จากทั้งหมด {len(workplan['contacts'])} ราย")
+    prospects = filter_prospects(
+        workplan["contacts"],
+        search_query,
+        status_filter,
+        grade_filter,
+    )
+    st.caption(f"พบ {len(prospects)} จาก {len(workplan['contacts'])} รายชื่อ")
     if not prospects:
-        st.warning("ไม่พบผู้มุ่งหวังที่ตรงกับตัวกรอง")
+        st.warning("ไม่พบผู้มุ่งหวังที่ตรงกับคำค้นหา")
+        _render_edit_form(profile, repository, workplan)
+        _render_delete_confirmation(profile, repository, workplan)
         return
 
     header = st.columns([1.9, 0.95, 0.55, 1.15, 1.15, 1.45, 1.05, 0.65, 0.5])
@@ -318,6 +347,39 @@ def _render_prospect_table(
 
     _render_edit_form(profile, repository, workplan)
     _render_delete_confirmation(profile, repository, workplan)
+
+
+def filter_prospects(
+    contacts: list[dict[str, Any]],
+    query: str = "",
+    status_filter: str = "ทั้งหมด",
+    category_filter: str = "ทั้งหมด",
+) -> list[dict[str, Any]]:
+    search = str(query or "").strip().casefold()
+    phone_search = "".join(character for character in search if character.isdigit())
+    expected_status = PROSPECT_STATUS_FILTERS.get(status_filter, status_filter)
+    results: list[dict[str, Any]] = []
+    for prospect in contacts:
+        if category_filter != "ทั้งหมด" and str(prospect.get("category", "")) != category_filter:
+            continue
+        if expected_status and str(prospect.get("status", "")) != expected_status:
+            continue
+        if search:
+            values = [
+                str(prospect.get(field, "") or "").casefold()
+                for field in PROSPECT_SEARCH_FIELDS
+            ]
+            text_match = any(search in value for value in values)
+            prospect_phone = "".join(
+                character
+                for character in str(prospect.get("phone", ""))
+                if character.isdigit()
+            )
+            phone_match = bool(phone_search and phone_search in prospect_phone)
+            if not text_match and not phone_match:
+                continue
+        results.append(prospect)
+    return results
 
 
 def _render_edit_form(

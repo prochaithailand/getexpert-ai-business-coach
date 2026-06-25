@@ -16,6 +16,7 @@ from services.workplan_service import (
     update_contact,
     update_contact_status,
 )
+from views.prospect_page import filter_prospects
 
 
 class ProspectManagerTests(unittest.TestCase):
@@ -146,6 +147,47 @@ class ProspectManagerTests(unittest.TestCase):
         )
         self.assertEqual([item["status"] for item in workplan["contacts"]], ["ติดต่อแล้ว", "ไม่สนใจ"])
         self.assertEqual(priority_contacts(workplan["contacts"])[0]["name"], "ติดต่อแล้ว")
+
+    def test_search_and_filters_preserve_matching_prospect_ids(self) -> None:
+        contacts = [
+            {
+                "id": "prospect-a",
+                "name": "สมชาย เจ้าของร้าน",
+                "phone": "081-234-5678",
+                "province": "ชุมพร",
+                "area": "หลังสวน",
+                "occupation": "เจ้าของร้านกาแฟ",
+                "status": "นัดหมายแล้ว",
+                "category": "A",
+                "notes": "สนใจนัดคุยวันเสาร์",
+                "line_id": "somchai.line",
+                "interest": "รายได้เสริม",
+                "pain_point": "มีเวลาจำกัด",
+                "previous_experience": "ขายออนไลน์",
+            },
+            {
+                "id": "prospect-b",
+                "name": "มาลี",
+                "phone": "0899999999",
+                "province": "เชียงใหม่",
+                "occupation": "ครู",
+                "status": "ไม่สนใจ",
+                "category": "C",
+            },
+        ]
+
+        self.assertEqual(filter_prospects(contacts, "สมชาย")[0]["id"], "prospect-a")
+        self.assertEqual(filter_prospects(contacts, "0812345678")[0]["id"], "prospect-a")
+        self.assertEqual(filter_prospects(contacts, "ชุมพร")[0]["id"], "prospect-a")
+        self.assertEqual(
+            [item["id"] for item in filter_prospects(contacts, status_filter="นัดหมาย")],
+            ["prospect-a"],
+        )
+        self.assertEqual(
+            [item["id"] for item in filter_prospects(contacts, category_filter="C")],
+            ["prospect-b"],
+        )
+        self.assertEqual(filter_prospects(contacts, "ไม่พบข้อมูล"), [])
 
 
 if __name__ == "__main__":

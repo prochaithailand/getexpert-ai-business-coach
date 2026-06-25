@@ -288,8 +288,10 @@ class AppSmokeTests(unittest.TestCase):
         grade_filter = next(item for item in app.selectbox if item.label == "กรองตามเกรด")
         status_filter = next(item for item in app.selectbox if item.label == "กรองตามสถานะ")
         self.assertEqual(tuple(grade_filter.options), ("ทั้งหมด", "A", "B", "C", "D"))
-        for required in ("ทั้งหมด", "ยังไม่ติดต่อ", "ติดต่อแล้ว", "นัดหมายแล้ว", "สมัครแล้ว"):
-            self.assertIn(required, status_filter.options)
+        self.assertEqual(
+            tuple(status_filter.options),
+            ("ทั้งหมด", "ยังไม่ติดต่อ", "ติดต่อแล้ว", "นัดหมาย", "สมัครแล้ว", "ปฏิเสธ"),
+        )
         for action in ("อัปเดตสถานะ", "แก้ไข", "ลบ"):
             self.assertTrue(any(item.label == action for item in app.button))
         rendered = " ".join(
