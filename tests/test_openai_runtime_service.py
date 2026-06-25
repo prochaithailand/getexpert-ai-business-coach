@@ -194,6 +194,58 @@ class OpenAIRuntimeServiceTests(unittest.TestCase):
         self.assertNotIn("person@example.com", serialized)
         self.assertIn("[REDACTED", serialized)
 
+    def test_success_rate_uses_latest_one_hundred_response_requests(self) -> None:
+        state = {}
+        runtime = OpenAIRuntimeService(state, max_retries=0, sleep=lambda _: None)
+        for index in range(105):
+            if index in {102, 104}:
+                with self.assertRaises(OpenAIRuntimeError):
+                    runtime.call(
+                        "responses",
+                        lambda: (_ for _ in ()).throw(StatusError(500)),
+                    )
+            else:
+                runtime.call("responses", lambda: "ok")
+
+        config = load_openai_config(
+            {"OPENAI_API_KEY": "sk-test-1234"},
+            {},
+        )
+        health = get_openai_diagnostic_health(config, runtime.health())
+
+        self.assertEqual(health["response_request_count"], 100)
+        self.assertEqual(health["response_success_count"], 98)
+        self.assertEqual(health["response_failure_count"], 2)
+        self.assertEqual(health["response_success_rate"], 98)
+
+    def test_embeddings_do_not_change_response_success_rate(self) -> None:
+        state = {}
+        runtime = OpenAIRuntimeService(state, max_retries=0, sleep=lambda _: None)
+        runtime.call("responses", lambda: "ok")
+        runtime.call("embeddings", lambda: "ok")
+        with self.assertRaises(OpenAIRuntimeError):
+            runtime.call(
+                "embeddings",
+                lambda: (_ for _ in ()).throw(StatusError(429)),
+            )
+
+        history = runtime.health()["response_request_history"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["result"], "success")
+
+    def test_response_validation_replaces_success_with_failure(self) -> None:
+        state = {}
+        runtime = OpenAIRuntimeService(state, max_retries=0, sleep=lambda _: None)
+        runtime.call("responses", lambda: "invalid output")
+        runtime.record_validation_failure()
+
+        history = runtime.health()["response_request_history"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["result"], "failure")
+        self.assertEqual(history[0]["error_category"], "response_validation")
+        self.assertNotIn("prompt", str(history))
+        self.assertNotIn("response", history[0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ T = TypeVar("T")
 HEALTH_KEY = "openai_health"
 GLOBAL_OPENAI_STATE: dict[str, Any] = {}
 TRANSIENT_ERRORS = {"timeout", "connection_error", "server_error", "rate_limit"}
+RESPONSE_HISTORY_LIMIT = 100
 
 
 @dataclass(frozen=True)
@@ -90,7 +91,13 @@ class OpenAIRuntimeService:
                 raise OpenAIRuntimeError(category, status_code) from error
 
     def record_validation_failure(self, operation: str = "responses") -> OpenAIRuntimeError:
-        self._record_failure(operation, "response_validation", None, 0)
+        self._record_failure(
+            operation,
+            "response_validation",
+            None,
+            0,
+            replace_last_success=True,
+        )
         return OpenAIRuntimeError("response_validation")
 
     def health(self) -> dict[str, Any]:
@@ -112,6 +119,8 @@ class OpenAIRuntimeService:
                 "last_request_id": "",
             }
         )
+        if operation == "responses":
+            _record_response_result(health, "success", retry_count)
         self.state[HEALTH_KEY] = health
 
     def _record_failure(
@@ -121,6 +130,7 @@ class OpenAIRuntimeService:
         status_code: int | None,
         retry_count: int,
         metadata: Mapping[str, str] | None = None,
+        replace_last_success: bool = False,
     ) -> None:
         health = self.health()
         safe_metadata = metadata or {}
@@ -138,6 +148,14 @@ class OpenAIRuntimeService:
                 "last_request_id": safe_metadata.get("request_id", ""),
             }
         )
+        if operation == "responses":
+            _record_response_result(
+                health,
+                "failure",
+                retry_count,
+                category=category,
+                replace_last_success=replace_last_success,
+            )
         self.state[HEALTH_KEY] = health
 
 
@@ -248,8 +266,15 @@ def load_openai_config(
     return OpenAIConfig(api_key, source, responses_model, embedding_model)
 
 
-def get_openai_diagnostic_health(config: OpenAIConfig) -> dict[str, Any]:
-    health = get_openai_health()
+def get_openai_diagnostic_health(
+    config: OpenAIConfig,
+    health_state: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    health = dict(health_state) if health_state is not None else get_openai_health()
+    history = _response_history(health)
+    success_count = sum(item.get("result") == "success" for item in history)
+    failure_count = len(history) - success_count
+    success_rate = round((success_count / len(history)) * 100) if history else 0
     health.update(
         {
             "api_key_configured": config.api_key_configured,
@@ -257,6 +282,10 @@ def get_openai_diagnostic_health(config: OpenAIConfig) -> dict[str, Any]:
             "masked_key": config.masked_key,
             "responses_model": config.responses_model,
             "embedding_model": config.embedding_model,
+            "response_request_count": len(history),
+            "response_success_count": success_count,
+            "response_failure_count": failure_count,
+            "response_success_rate": success_rate,
         }
     )
     return health
@@ -334,3 +363,41 @@ def _sanitize_error_message(value: Any) -> str:
         text,
     )
     return text[:240]
+
+
+def _response_history(health: Mapping[str, Any]) -> list[dict[str, Any]]:
+    history = health.get("response_request_history", [])
+    if not isinstance(history, list):
+        return []
+    return [
+        dict(item)
+        for item in history[-RESPONSE_HISTORY_LIMIT:]
+        if isinstance(item, Mapping)
+        and item.get("result") in {"success", "failure"}
+    ]
+
+
+def _record_response_result(
+    health: dict[str, Any],
+    result: str,
+    retry_count: int,
+    *,
+    category: str = "",
+    replace_last_success: bool = False,
+) -> None:
+    history = _response_history(health)
+    event = {
+        "result": result,
+        "error_category": category if result == "failure" else "",
+        "retry_count": int(retry_count),
+        "timestamp": _now(),
+    }
+    if (
+        replace_last_success
+        and history
+        and history[-1].get("result") == "success"
+    ):
+        history[-1] = event
+    else:
+        history.append(event)
+    health["response_request_history"] = history[-RESPONSE_HISTORY_LIMIT:]
