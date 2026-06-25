@@ -1,14 +1,35 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Mapping, TypeVar
 
 
 T = TypeVar("T")
 HEALTH_KEY = "openai_health"
 GLOBAL_OPENAI_STATE: dict[str, Any] = {}
 TRANSIENT_ERRORS = {"timeout", "connection_error", "server_error", "rate_limit"}
+
+
+@dataclass(frozen=True)
+class OpenAIConfig:
+    api_key: str = ""
+    source: str = "missing"
+    responses_model: str = ""
+    embedding_model: str = ""
+
+    @property
+    def api_key_configured(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def masked_key(self) -> str:
+        if not self.api_key:
+            return "-"
+        suffix = self.api_key[-4:] if len(self.api_key) >= 4 else "****"
+        prefix = "sk-" if self.api_key.startswith("sk-") else "key-"
+        return f"{prefix}...{suffix}"
 
 
 class OpenAIRuntimeError(RuntimeError):
@@ -129,6 +150,66 @@ def get_openai_health() -> dict[str, Any]:
     return dict(GLOBAL_OPENAI_STATE.get(HEALTH_KEY, {}))
 
 
+def load_openai_config(
+    streamlit_secrets: Any,
+    environment: Mapping[str, str],
+    *,
+    default_responses_model: str = "",
+    default_embedding_model: str = "",
+) -> OpenAIConfig:
+    environment_key = str(environment.get("OPENAI_API_KEY", "") or "").strip()
+    secret_key = _safe_secret(streamlit_secrets, "OPENAI_API_KEY")
+    if environment_key:
+        api_key, source = environment_key, "environment"
+    elif secret_key:
+        api_key, source = secret_key, "streamlit_secrets"
+    else:
+        api_key, source = "", "missing"
+
+    responses_model = (
+        str(environment.get("OPENAI_MODEL", "") or "").strip()
+        or _safe_secret(streamlit_secrets, "OPENAI_MODEL")
+        or default_responses_model
+    )
+    embedding_model = (
+        str(environment.get("OPENAI_EMBEDDING_MODEL", "") or "").strip()
+        or _safe_secret(streamlit_secrets, "OPENAI_EMBEDDING_MODEL")
+        or default_embedding_model
+    )
+    return OpenAIConfig(api_key, source, responses_model, embedding_model)
+
+
+def get_openai_diagnostic_health(config: OpenAIConfig) -> dict[str, Any]:
+    health = get_openai_health()
+    health.update(
+        {
+            "api_key_configured": config.api_key_configured,
+            "config_source": config.source,
+            "masked_key": config.masked_key,
+            "responses_model": config.responses_model,
+            "embedding_model": config.embedding_model,
+        }
+    )
+    return health
+
+
+def build_answer_metadata(
+    answer_source: str,
+    *,
+    health: Mapping[str, Any] | None = None,
+    error_category: str = "",
+    model: str = "",
+) -> dict[str, Any]:
+    operational = health or {}
+    return {
+        "answer_source": answer_source,
+        "error_category": error_category,
+        "retry_count": int(operational.get("last_retry_count", 0) or 0),
+        "timestamp": _now(),
+        "model": model if answer_source == "openai" else "",
+    }
+
+
 def _status_code(error: Exception) -> int | None:
     value = getattr(error, "status_code", None)
     if value is None:
@@ -152,3 +233,14 @@ def _retry_delay(error: Exception, retry_count: int) -> float:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_secret(secrets: Any, name: str) -> str:
+    try:
+        value = secrets.get(name, "")
+    except Exception:
+        try:
+            value = secrets[name]
+        except Exception:
+            return ""
+    return str(value or "").strip()

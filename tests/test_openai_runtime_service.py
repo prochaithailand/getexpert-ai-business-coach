@@ -4,7 +4,10 @@ from types import SimpleNamespace
 from services.openai_runtime_service import (
     OpenAIRuntimeError,
     OpenAIRuntimeService,
+    build_answer_metadata,
     classify_openai_error,
+    get_openai_diagnostic_health,
+    load_openai_config,
 )
 
 
@@ -89,6 +92,46 @@ class OpenAIRuntimeServiceTests(unittest.TestCase):
         self.assertNotIn("api_key", health)
         self.assertNotIn("prompt", health)
         self.assertNotIn("response", health)
+
+    def test_diagnostic_uses_live_streamlit_secret_config(self) -> None:
+        config = load_openai_config(
+            {"OPENAI_API_KEY": "sk-secret-1234", "OPENAI_MODEL": "gpt-live"},
+            {},
+            default_embedding_model="embedding-default",
+        )
+        health = get_openai_diagnostic_health(config)
+
+        self.assertTrue(health["api_key_configured"])
+        self.assertEqual(health["config_source"], "streamlit_secrets")
+        self.assertEqual(health["masked_key"], "sk-...1234")
+        self.assertEqual(health["responses_model"], "gpt-live")
+        self.assertNotIn("sk-secret-1234", str(health))
+
+    def test_diagnostic_reports_missing_key_without_exposing_values(self) -> None:
+        config = load_openai_config(
+            {},
+            {},
+            default_responses_model="gpt-default",
+            default_embedding_model="embedding-default",
+        )
+        health = get_openai_diagnostic_health(config)
+
+        self.assertFalse(health["api_key_configured"])
+        self.assertEqual(health["config_source"], "missing")
+        self.assertEqual(health["masked_key"], "-")
+
+    def test_answer_metadata_contains_no_prompt_response_or_key(self) -> None:
+        metadata = build_answer_metadata(
+            "openai",
+            health={"last_retry_count": 1},
+            model="gpt-test",
+        )
+
+        self.assertEqual(metadata["answer_source"], "openai")
+        self.assertEqual(metadata["retry_count"], 1)
+        self.assertNotIn("prompt", metadata)
+        self.assertNotIn("response", metadata)
+        self.assertNotIn("api_key", metadata)
 
 
 if __name__ == "__main__":

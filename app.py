@@ -19,7 +19,11 @@ from services.coach_service import LocalCoachService
 from services.auth_service import SessionUserStore, recovery_params_from_query
 from services.knowledge_service import KnowledgeService
 from services.openai_coach_service import OpenAICoachService
-from services.openai_runtime_service import GLOBAL_OPENAI_STATE, OpenAIRuntimeService
+from services.openai_runtime_service import (
+    GLOBAL_OPENAI_STATE,
+    OpenAIRuntimeService,
+    load_openai_config,
+)
 from services.profile_repository import SessionProfileRepository
 from services.permissions import visible_navigation
 from services.subscription_service import LOCKED_MESSAGE, has_active_subscription
@@ -429,9 +433,15 @@ def render_mobile_menu_toggle() -> None:
 def get_coach_service() -> LocalCoachService:
     """สร้างบริการโค้ชและเชื่อมต่อคลังความรู้ของระบบ"""
     knowledge_dir = Path(__file__).resolve().parent / "knowledge"
-    api_key = get_setting("OPENAI_API_KEY")
-    model = get_setting("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
-    embedding_model = get_setting("OPENAI_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
+    openai_config = load_openai_config(
+        st.secrets,
+        os.environ,
+        default_responses_model=DEFAULT_OPENAI_MODEL,
+        default_embedding_model=DEFAULT_EMBEDDING_MODEL,
+    )
+    api_key = openai_config.api_key
+    model = openai_config.responses_model
+    embedding_model = openai_config.embedding_model
     if api_key:
         from openai import OpenAI
 
