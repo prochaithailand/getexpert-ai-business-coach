@@ -264,6 +264,7 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
                     st.rerun()
 
 
+# Test deployment marker: OpenAI diagnostic success-rate UI.
 def _render_openai_diagnostic(health: dict[str, object]) -> None:
     st.subheader("สถานะระบบ OpenAI")
     success_rate = int(
