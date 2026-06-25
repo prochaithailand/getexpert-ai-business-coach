@@ -15,6 +15,7 @@ from services.onboarding_service import build_onboarding_status
 from services.profile_repository import ProfileRepository
 from services.progress_service import calculate_plan_progress, member_progress_key
 from services.supabase_service import get_authenticated_supabase_user, get_supabase_service, run_supabase_sync
+from ui.ai_coaching_pipeline import render_ai_coaching_pipeline
 
 
 def _page_header(title: str, description: str) -> None:
@@ -517,12 +518,13 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
             run_supabase_sync(st.session_state, supabase.save_chat_message, authenticated, "user", prompt)
         with st.chat_message("user"):
             st.markdown(prompt)
-        result = coach.answer_question(
-            prompt,
-            profile,
-            st.session_state.coach_messages[:-1],
-            build_member_activity_context(st.session_state, profile),
-        )
+        with render_ai_coaching_pipeline():
+            result = coach.answer_question(
+                prompt,
+                profile,
+                st.session_state.coach_messages[:-1],
+                build_member_activity_context(st.session_state, profile),
+            )
         response = result.answer
         st.session_state.coach_messages.append(
             {
