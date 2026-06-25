@@ -85,6 +85,16 @@ class AppUser:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppUser":
+        data = dict(data)
+        aliases = {
+            "membership_status": "subscription_status",
+            "membership_plan": "subscription_plan",
+            "membership_started_at": "subscription_started_at",
+            "membership_expires_at": "subscription_expires_at",
+        }
+        for source, target in aliases.items():
+            if source in data and not data.get(target):
+                data[target] = data[source]
         allowed = cls.__dataclass_fields__.keys()
         return cls(**{key: value for key, value in data.items() if key in allowed})
 

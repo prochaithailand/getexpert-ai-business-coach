@@ -11,6 +11,35 @@ ACTIVE_STATUSES = {"active", "trialing"}
 TRIAL_DAYS = 7
 
 
+def _account_value(user: AppUser, primary: str, alias: str, default: object) -> object:
+    primary_value = getattr(user, primary, None)
+    if primary_value not in (None, ""):
+        return primary_value
+    alias_value = getattr(user, alias, None)
+    if alias_value not in (None, ""):
+        return alias_value
+    return default
+
+
+def _parse_account_datetime(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _utc_now(now: datetime | None = None) -> datetime:
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current.astimezone(timezone.utc)
+
+
 def normalize_subscription_user(user: AppUser) -> AppUser:
     return AppUser(
         email=str(getattr(user, "email", "")),
@@ -18,16 +47,22 @@ def normalize_subscription_user(user: AppUser) -> AppUser:
         role=str(getattr(user, "role", "Member") or "Member"),
         password_hash=str(getattr(user, "password_hash", "")),
         subscription_status=str(
-            getattr(user, "subscription_status", "active") or "active"
+            _account_value(
+                user, "subscription_status", "membership_status", "active"
+            )
         ),
         subscription_plan=str(
-            getattr(user, "subscription_plan", "Member") or "Member"
+            _account_value(user, "subscription_plan", "membership_plan", "Member")
         ),
         subscription_started_at=str(
-            getattr(user, "subscription_started_at", "") or ""
+            _account_value(
+                user, "subscription_started_at", "membership_started_at", ""
+            )
         ),
         subscription_expires_at=str(
-            getattr(user, "subscription_expires_at", "") or ""
+            _account_value(
+                user, "subscription_expires_at", "membership_expires_at", ""
+            )
         ),
         last_payment_at=str(getattr(user, "last_payment_at", "") or ""),
         approved_by=str(getattr(user, "approved_by", "") or ""),
@@ -44,22 +79,15 @@ def effective_subscription_status(user: AppUser, now: datetime | None = None) ->
         return "active"
     status = getattr(user, "subscription_status", "active") or "active"
     if status == "trialing":
-        trial_ends_at = getattr(user, "trial_ends_at", "") or ""
-        if not trial_ends_at:
+        trial_end = _parse_account_datetime(user.trial_ends_at)
+        if not trial_end:
             return "expired"
-        try:
-            trial_end = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
-            return "expired" if trial_end < (now or datetime.now(timezone.utc)) else "trialing"
-        except ValueError:
-            return "expired"
+        return "expired" if trial_end < _utc_now(now) else "trialing"
     expires_at = getattr(user, "subscription_expires_at", "") or ""
     if status == "active" and expires_at:
-        try:
-            expires = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-            if expires < (now or datetime.now(timezone.utc)):
-                return "expired"
-        except ValueError:
-            return status
+        expires = _parse_account_datetime(expires_at)
+        if expires and expires < _utc_now(now):
+            return "expired"
     return status
 
 
@@ -74,7 +102,7 @@ def start_trial(user: AppUser, now: datetime | None = None) -> AppUser:
     user = normalize_subscription_user(user)
     if user.trial_used:
         raise ValueError("บัญชีนี้เคยใช้สิทธิ์ทดลองใช้ฟรีแล้ว")
-    current = now or datetime.now(timezone.utc)
+    current = _utc_now(now)
     return replace(
         user,
         subscription_status="trialing",
@@ -86,13 +114,10 @@ def start_trial(user: AppUser, now: datetime | None = None) -> AppUser:
 
 def trial_days_remaining(user: AppUser, now: datetime | None = None) -> int:
     user = normalize_subscription_user(user)
-    if not user.trial_ends_at:
+    end = _parse_account_datetime(user.trial_ends_at)
+    if not end:
         return 0
-    try:
-        end = datetime.fromisoformat(user.trial_ends_at.replace("Z", "+00:00"))
-    except ValueError:
-        return 0
-    seconds = (end - (now or datetime.now(timezone.utc))).total_seconds()
+    seconds = (end - _utc_now(now)).total_seconds()
     if seconds <= 0:
         return 0
     return max(1, int((seconds + 86399) // 86400))

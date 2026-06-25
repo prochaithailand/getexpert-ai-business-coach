@@ -254,6 +254,40 @@ class SupabaseServiceTests(unittest.TestCase):
         self.assertEqual(user["subscription_status"], "active")
         self.assertEqual(user["subscription_plan"], "Member")
 
+    def test_sign_in_maps_membership_trial_fields_for_access_gate(self) -> None:
+        trial_end = "2026-07-02T08:00:00+00:00"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/auth/v1/token"):
+                return httpx.Response(200, json={
+                    "access_token": "access-token",
+                    "refresh_token": "refresh-token",
+                    "user": {"id": "user-1", "user_metadata": {}},
+                })
+            if request.url.path.endswith("/rest/v1/users"):
+                return httpx.Response(200, json=[{
+                    "email": "trial@example.com",
+                    "full_name": "Trial User",
+                    "role": "Member",
+                    "membership_status": "trialing",
+                    "trial_started_at": "2026-06-25T08:00:00+00:00",
+                    "trial_ends_at": trial_end,
+                    "trial_used": True,
+                }])
+            return httpx.Response(404)
+
+        service = SupabaseService(
+            "https://project.supabase.co",
+            "anon-key",
+            httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+
+        user = service.sign_in("trial@example.com", "password")
+
+        self.assertEqual(user["subscription_status"], "trialing")
+        self.assertEqual(user["trial_ends_at"], trial_end)
+        self.assertTrue(user["trial_used"])
+
     def test_schema_verification_reports_missing_tables(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path.endswith("/rest/v1/pp_scores"):

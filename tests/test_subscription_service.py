@@ -148,3 +148,63 @@ class SubscriptionServiceTests(unittest.TestCase):
             now + timedelta(days=30),
         )
         self.assertTrue(approved.trial_used)
+
+    def test_future_trial_from_membership_fields_has_main_access(self):
+        now = datetime(2026, 6, 25, tzinfo=timezone.utc)
+        user = AppUser.from_dict({
+            "email": "trial@example.com",
+            "full_name": "Trial",
+            "membership_status": "trialing",
+            "trial_ends_at": (now + timedelta(days=3)).isoformat(),
+            "trial_used": True,
+        })
+        items = (
+            "หน้าแรก",
+            "ชำระเงิน / เปิดใช้งาน",
+            "Workplan ธุรกิจ",
+            "ผู้มุ่งหวัง",
+            "ถามคำถาม AI",
+            "ตั้งค่าบัญชี",
+        )
+
+        self.assertTrue(has_active_subscription(user, now))
+        navigation = visible_navigation(items, user)
+        self.assertIn("Workplan ธุรกิจ", navigation)
+        self.assertIn("ผู้มุ่งหวัง", navigation)
+        self.assertIn("ถามคำถาม AI", navigation)
+        self.assertNotIn("ชำระเงิน / เปิดใช้งาน", navigation)
+
+    def test_expired_trial_from_membership_fields_is_payment_only(self):
+        now = datetime(2026, 6, 25, tzinfo=timezone.utc)
+        user = AppUser.from_dict({
+            "email": "expired@example.com",
+            "full_name": "Expired Trial",
+            "membership_status": "trialing",
+            "trial_ends_at": (now - timedelta(seconds=1)).isoformat(),
+            "trial_used": True,
+        })
+        items = (
+            "หน้าแรก",
+            "โปรไฟล์สมาชิก",
+            "ชำระเงิน / เปิดใช้งาน",
+            "Workplan ธุรกิจ",
+            "ตั้งค่าบัญชี",
+            "ออกจากระบบ",
+        )
+
+        self.assertFalse(has_active_subscription(user, now))
+        navigation = visible_navigation(items, user)
+        self.assertNotIn("Workplan ธุรกิจ", navigation)
+        self.assertIn("ชำระเงิน / เปิดใช้งาน", navigation)
+
+    def test_trial_timestamp_without_timezone_is_treated_as_utc(self):
+        now = datetime(2026, 6, 25, tzinfo=timezone.utc)
+        user = AppUser(
+            "trial@example.com",
+            "Trial",
+            subscription_status="trialing",
+            trial_ends_at="2026-06-26T00:00:00",
+            trial_used=True,
+        )
+
+        self.assertTrue(has_active_subscription(user, now))

@@ -70,14 +70,31 @@ class SupabaseService:
         token = str(payload.get("access_token", ""))
         profile_rows = self.select("users", {"email": f"eq.{email.casefold()}"}, token)
         role_row = profile_rows[0] if profile_rows else {}
+        subscription_status = (
+            role_row.get("subscription_status")
+            or role_row.get("membership_status")
+            or "active"
+        )
         return {
             "email": email.casefold(),
             "full_name": role_row.get("full_name") or auth_user.get("user_metadata", {}).get("full_name") or email,
             "role": role_row.get("role", "Member"),
-            "subscription_status": role_row.get("subscription_status") or "active",
-            "subscription_plan": role_row.get("subscription_plan") or "Member",
-            "subscription_started_at": role_row.get("subscription_started_at") or "",
-            "subscription_expires_at": role_row.get("subscription_expires_at") or "",
+            "subscription_status": subscription_status,
+            "subscription_plan": (
+                role_row.get("subscription_plan")
+                or role_row.get("membership_plan")
+                or "Member"
+            ),
+            "subscription_started_at": (
+                role_row.get("subscription_started_at")
+                or role_row.get("membership_started_at")
+                or ""
+            ),
+            "subscription_expires_at": (
+                role_row.get("subscription_expires_at")
+                or role_row.get("membership_expires_at")
+                or ""
+            ),
             "last_payment_at": role_row.get("last_payment_at") or "",
             "approved_by": role_row.get("approved_by") or "",
             "approved_at": role_row.get("approved_at") or "",
