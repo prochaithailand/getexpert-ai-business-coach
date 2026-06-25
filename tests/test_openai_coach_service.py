@@ -78,6 +78,9 @@ class OpenAICoachServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(result.sources, ("หนังสือ 5 โมดูลธุรกิจ MLM",))
+        self.assertEqual(result.metadata["answer_source"], "openai")
+        self.assertEqual(result.metadata["model"], "gpt-test")
+        self.assertEqual(result.metadata["error_category"], "")
         call = responses.calls[0]
         self.assertEqual(call["model"], "gpt-test")
         self.assertFalse(call["store"])
@@ -197,6 +200,10 @@ class OpenAICoachServiceTests(unittest.TestCase):
         self.assertIn("AI หลักยังไม่พร้อมใช้งาน", result.answer)
         self.assertIn("การสร้างรายชื่อผู้มุ่งหวัง", result.answer)
         self.assertEqual(result.sources, ("หนังสือ 5 โมดูลธุรกิจ MLM",))
+        self.assertEqual(result.metadata["answer_source"], "fallback")
+        self.assertEqual(result.metadata["error_category"], "unknown")
+        self.assertEqual(result.metadata["model"], "")
+        self.assertNotIn("offline", str(result.metadata))
 
     def test_openai_action_plan_receives_all_profile_fields(self) -> None:
         days = [

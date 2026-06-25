@@ -507,6 +507,8 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
     for message in st.session_state.coach_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            if message["role"] == "assistant":
+                _render_answer_source(message.get("metadata", {}))
     if prompt := st.chat_input("ถามเกี่ยวกับ 5 โมดูล แผนงาน MLM, LINE OA, TikTok, Canva หรือคู่มืออื่น ๆ..."):
         st.session_state.coach_messages.append({"role": "user", "content": prompt})
         supabase = get_supabase_service(st.session_state)
@@ -523,7 +525,12 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
         )
         response = result.answer
         st.session_state.coach_messages.append(
-            {"role": "assistant", "content": response, "sources": list(result.sources)}
+            {
+                "role": "assistant",
+                "content": response,
+                "sources": list(result.sources),
+                "metadata": dict(result.metadata),
+            }
         )
         if supabase and authenticated:
             run_supabase_sync(
@@ -533,3 +540,34 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
         record_member_usage(st.session_state, profile, "ai_coach")
         with st.chat_message("assistant"):
             st.markdown(response)
+            _render_answer_source(result.metadata)
+
+
+def _render_answer_source(metadata: dict[str, object]) -> None:
+    source = str(metadata.get("answer_source", "") or "")
+    if not source:
+        return
+    if source == "openai":
+        model = str(metadata.get("model", "") or "")
+        label = "แหล่งคำตอบ: OpenAI"
+        if model:
+            label += f" ({model})"
+        st.caption(label)
+        return
+    category = str(metadata.get("error_category", "") or "")
+    category_labels = {
+        "authentication_error": "การยืนยันตัวตน",
+        "permission_error": "สิทธิ์การใช้งาน",
+        "rate_limit": "จำนวนคำขอหนาแน่น",
+        "billing_or_quota": "โควตาการใช้งาน",
+        "timeout": "ตอบกลับช้าเกินกำหนด",
+        "connection_error": "การเชื่อมต่อ",
+        "server_error": "บริการ AI ขัดข้องชั่วคราว",
+        "invalid_model_or_request": "การตั้งค่าโมเดล",
+        "response_validation": "รูปแบบคำตอบ",
+        "unknown": "ไม่ทราบประเภท",
+    }
+    label = "แหล่งคำตอบ: คำตอบสำรองภายในระบบ"
+    if category:
+        label += f" | สาเหตุ: {category_labels.get(category, category)}"
+    st.caption(label)

@@ -9,7 +9,11 @@ from models import ActionItem, CoachAnswer, KnowledgeMatch, MemberProfile
 from services.coach_service import LocalCoachService
 from services.knowledge_service import KnowledgeService
 from services.member_activity_service import MemberActivityContext, NO_WORKPLAN_MESSAGE, is_workplan_question
-from services.openai_runtime_service import OpenAIRuntimeError, OpenAIRuntimeService
+from services.openai_runtime_service import (
+    OpenAIRuntimeError,
+    OpenAIRuntimeService,
+    build_answer_metadata,
+)
 
 
 class OpenAICoachService(LocalCoachService):
@@ -276,7 +280,15 @@ class OpenAICoachService(LocalCoachService):
             answer = (response.output_text or "").strip()
             if not self._contains_thai(answer):
                 raise self.openai_runtime.record_validation_failure()
-            return CoachAnswer(self._append_source_section(answer, sources), sources)
+            return CoachAnswer(
+                self._append_source_section(answer, sources),
+                sources,
+                build_answer_metadata(
+                    "openai",
+                    health=self.openai_runtime.health(),
+                    model=self.model,
+                ),
+            )
         except OpenAIRuntimeError as error:
             fallback = super().answer_question(message, profile, history, activity_context)
             if error.category == "response_validation":
@@ -291,6 +303,11 @@ class OpenAICoachService(LocalCoachService):
             return CoachAnswer(
                 notice + "\n\n" + fallback.answer,
                 fallback.sources,
+                build_answer_metadata(
+                    "fallback",
+                    health=self.openai_runtime.health(),
+                    error_category=error.category,
+                ),
             )
 
     def _response_call(self, **kwargs: Any) -> Any:

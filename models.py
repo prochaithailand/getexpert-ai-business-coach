@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -158,3 +159,10 @@ class KnowledgeMatch:
 class CoachAnswer:
     answer: str
     sources: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=lambda: {
+        "answer_source": "fallback",
+        "error_category": "",
+        "retry_count": 0,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "model": "",
+    })

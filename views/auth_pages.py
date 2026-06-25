@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import os
+
 import streamlit as st
 
+from config import DEFAULT_EMBEDDING_MODEL, DEFAULT_OPENAI_MODEL
 from models import AppUser
 from services.auth_service import SessionUserStore
 from services.permissions import UNAUTHORIZED_MESSAGE
-from services.openai_runtime_service import get_openai_health
+from services.openai_runtime_service import (
+    get_openai_diagnostic_health,
+    load_openai_config,
+)
 from services.supabase_service import SupabaseError
 from services.subscription_service import (
     effective_subscription_status,
@@ -207,7 +213,13 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
         "โดยผู้ดูแลระบบที่มีอยู่แล้ว</p>",
         unsafe_allow_html=True,
     )
-    _render_openai_diagnostic(get_openai_health())
+    openai_config = load_openai_config(
+        st.secrets,
+        os.environ,
+        default_responses_model=DEFAULT_OPENAI_MODEL,
+        default_embedding_model=DEFAULT_EMBEDDING_MODEL,
+    )
+    _render_openai_diagnostic(get_openai_diagnostic_health(openai_config))
     for account in store.list_users():
         account = normalize_subscription_user(account)
         role_label = {
@@ -252,16 +264,39 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
                     st.rerun()
 
 
+# Test deployment marker: OpenAI diagnostic success-rate UI.
 def _render_openai_diagnostic(health: dict[str, object]) -> None:
     st.subheader("สถานะระบบ OpenAI")
+    success_rate = int(
+        health.get("success_rate", health.get("response_success_rate", 0)) or 0
+    )
+    success_count = int(
+        health.get("success_count", health.get("response_success_count", 0)) or 0
+    )
+    failure_count = int(
+        health.get("failure_count", health.get("response_failure_count", 0)) or 0
+    )
+    request_count = int(
+        health.get("total_requests", health.get("response_request_count", 0)) or 0
+    )
     configured = "ใช่" if health.get("api_key_configured") else "ไม่ใช่"
     labels = (
+        ("Success Rate (Last 100 Requests)", f"{success_rate}%"),
+        ("Success", success_count),
+        ("Failure", failure_count),
+        ("Total Requests", request_count),
         ("ตั้งค่า API key แล้ว", configured),
+        ("แหล่งการตั้งค่า", health.get("config_source") or "missing"),
+        ("API key", health.get("masked_key") or "-"),
         ("Responses model", health.get("responses_model") or "-"),
         ("Embedding model", health.get("embedding_model") or "-"),
         ("ผลล่าสุด", health.get("last_result") or "ยังไม่มีข้อมูล"),
         ("การทำงานล่าสุด", health.get("last_operation") or "-"),
         ("ประเภทข้อผิดพลาดล่าสุด", health.get("last_error_type") or "-"),
+        ("OpenAI error code", health.get("last_error_code") or "-"),
+        ("OpenAI error type", health.get("last_error_api_type") or "-"),
+        ("รายละเอียดแบบย่อ", health.get("last_error_message") or "-"),
+        ("Request ID", health.get("last_request_id") or "-"),
         ("HTTP status ล่าสุด", health.get("last_status_code") or "-"),
         ("สำเร็จล่าสุด", health.get("last_success_time") or "-"),
         ("ล้มเหลวล่าสุด", health.get("last_failure_time") or "-"),
