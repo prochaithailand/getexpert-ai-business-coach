@@ -8,14 +8,27 @@ from services.openai_runtime_service import (
     classify_openai_error,
     get_openai_diagnostic_health,
     load_openai_config,
+    sanitize_openai_error_metadata,
 )
 
 
 class StatusError(Exception):
-    def __init__(self, status_code: int, message: str = "") -> None:
+    def __init__(
+        self,
+        status_code: int,
+        message: str = "",
+        *,
+        body=None,
+        request_id: str = "",
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
-        self.response = SimpleNamespace(status_code=status_code, headers={})
+        self.body = body
+        self.request_id = request_id
+        self.response = SimpleNamespace(
+            status_code=status_code,
+            headers={"x-request-id": request_id} if request_id else {},
+        )
 
 
 class OpenAIRuntimeServiceTests(unittest.TestCase):
@@ -132,6 +145,54 @@ class OpenAIRuntimeServiceTests(unittest.TestCase):
         self.assertNotIn("prompt", metadata)
         self.assertNotIn("response", metadata)
         self.assertNotIn("api_key", metadata)
+
+    def test_quota_error_records_sanitized_openai_metadata(self) -> None:
+        state = {}
+        runtime = OpenAIRuntimeService(state, max_retries=0, sleep=lambda _: None)
+        error = StatusError(
+            429,
+            body={
+                "error": {
+                    "code": "insufficient_quota",
+                    "type": "insufficient_quota",
+                    "message": "You exceeded your current quota for project.",
+                }
+            },
+            request_id="req_123",
+        )
+
+        with self.assertRaises(OpenAIRuntimeError):
+            runtime.call("embeddings", lambda: (_ for _ in ()).throw(error))
+
+        health = runtime.health()
+        self.assertEqual(health["last_error_type"], "billing_or_quota")
+        self.assertEqual(health["last_error_code"], "insufficient_quota")
+        self.assertEqual(health["last_error_api_type"], "insufficient_quota")
+        self.assertEqual(health["last_request_id"], "req_123")
+        self.assertIn("current quota", health["last_error_message"])
+        self.assertNotIn("body", health)
+        self.assertNotIn("response", health)
+
+    def test_error_metadata_redacts_credentials_and_email(self) -> None:
+        error = StatusError(
+            429,
+            body={
+                "code": "rate_limit_exceeded",
+                "type": "tokens",
+                "message": (
+                    "API key: sk-secretvalue123456 for person@example.com "
+                    "has reached a project limit"
+                ),
+            },
+        )
+
+        metadata = sanitize_openai_error_metadata(error)
+
+        serialized = str(metadata)
+        self.assertEqual(metadata["error_code"], "rate_limit_exceeded")
+        self.assertNotIn("sk-secretvalue123456", serialized)
+        self.assertNotIn("person@example.com", serialized)
+        self.assertIn("[REDACTED", serialized)
 
 
 if __name__ == "__main__":

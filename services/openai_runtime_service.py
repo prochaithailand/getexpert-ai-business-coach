@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, TypeVar
@@ -74,11 +75,18 @@ class OpenAIRuntimeService:
                 raise
             except Exception as error:
                 category, status_code = classify_openai_error(error)
+                metadata = sanitize_openai_error_metadata(error)
                 if category in TRANSIENT_ERRORS and retry_count < self.max_retries:
                     retry_count += 1
                     self.sleep(_retry_delay(error, retry_count))
                     continue
-                self._record_failure(operation, category, status_code, retry_count)
+                self._record_failure(
+                    operation,
+                    category,
+                    status_code,
+                    retry_count,
+                    metadata,
+                )
                 raise OpenAIRuntimeError(category, status_code) from error
 
     def record_validation_failure(self, operation: str = "responses") -> OpenAIRuntimeError:
@@ -98,6 +106,10 @@ class OpenAIRuntimeService:
                 "last_retry_count": retry_count,
                 "last_status_code": None,
                 "last_result": "success",
+                "last_error_code": "",
+                "last_error_api_type": "",
+                "last_error_message": "",
+                "last_request_id": "",
             }
         )
         self.state[HEALTH_KEY] = health
@@ -108,8 +120,10 @@ class OpenAIRuntimeService:
         category: str,
         status_code: int | None,
         retry_count: int,
+        metadata: Mapping[str, str] | None = None,
     ) -> None:
         health = self.health()
+        safe_metadata = metadata or {}
         health.update(
             {
                 "last_operation": operation,
@@ -118,6 +132,10 @@ class OpenAIRuntimeService:
                 "last_retry_count": retry_count,
                 "last_status_code": status_code,
                 "last_result": "failure",
+                "last_error_code": safe_metadata.get("error_code", ""),
+                "last_error_api_type": safe_metadata.get("error_type", ""),
+                "last_error_message": safe_metadata.get("error_message", ""),
+                "last_request_id": safe_metadata.get("request_id", ""),
             }
         )
         self.state[HEALTH_KEY] = health
@@ -127,12 +145,23 @@ def classify_openai_error(error: Exception) -> tuple[str, int | None]:
     status_code = _status_code(error)
     name = error.__class__.__name__.casefold()
     message = str(error).casefold()
+    metadata = sanitize_openai_error_metadata(error)
+    structured = " ".join(
+        (
+            metadata.get("error_code", ""),
+            metadata.get("error_type", ""),
+            metadata.get("error_message", ""),
+        )
+    ).casefold()
     if status_code == 401 or "authentication" in name:
         return "authentication_error", status_code
     if status_code == 403 or "permission" in name:
         return "permission_error", status_code
     if status_code == 429:
-        if any(term in message for term in ("quota", "billing", "credit", "insufficient_quota")):
+        if any(
+            term in f"{message} {structured}"
+            for term in ("quota", "billing", "credit", "insufficient_quota")
+        ):
             return "billing_or_quota", status_code
         return "rate_limit", status_code
     if status_code in {500, 502, 503, 504}:
@@ -141,9 +170,49 @@ def classify_openai_error(error: Exception) -> tuple[str, int | None]:
         return "timeout", status_code
     if "connection" in name or any(term in message for term in ("connection", "network", "dns")):
         return "connection_error", status_code
-    if status_code == 400 or any(term in message for term in ("invalid model", "model_not_found", "invalid request")):
+    if status_code == 400 or any(
+        term in f"{message} {structured}"
+        for term in ("invalid model", "model_not_found", "invalid request")
+    ):
         return "invalid_model_or_request", status_code
     return "unknown", status_code
+
+
+def sanitize_openai_error_metadata(error: Exception) -> dict[str, str]:
+    body = getattr(error, "body", None)
+    error_data: Mapping[str, Any] = {}
+    if isinstance(body, Mapping):
+        nested = body.get("error")
+        error_data = nested if isinstance(nested, Mapping) else body
+
+    code = _safe_text(
+        error_data.get("code")
+        or getattr(error, "code", "")
+    )
+    error_type = _safe_text(
+        error_data.get("type")
+        or getattr(error, "type", "")
+    )
+    message = _sanitize_error_message(
+        error_data.get("message")
+        or getattr(error, "message", "")
+        or str(error)
+    )
+    request_id = _safe_text(getattr(error, "request_id", ""))
+    if not request_id:
+        headers = getattr(getattr(error, "response", None), "headers", {}) or {}
+        if hasattr(headers, "get"):
+            request_id = _safe_text(
+                headers.get("x-request-id")
+                or headers.get("request-id")
+                or headers.get("openai-request-id")
+            )
+    return {
+        "error_code": code,
+        "error_type": error_type,
+        "error_message": message,
+        "request_id": request_id,
+    }
 
 
 def get_openai_health() -> dict[str, Any]:
@@ -244,3 +313,24 @@ def _safe_secret(secrets: Any, name: str) -> str:
         except Exception:
             return ""
     return str(value or "").strip()
+
+
+def _safe_text(value: Any, limit: int = 160) -> str:
+    text = " ".join(str(value or "").split())
+    return text[:limit]
+
+
+def _sanitize_error_message(value: Any) -> str:
+    text = _safe_text(value, limit=300)
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "[REDACTED_KEY]", text)
+    text = re.sub(
+        r"(?i)\b(?:api[_ -]?key|authorization|bearer)\s*[:=]\s*\S+",
+        "[REDACTED_CREDENTIAL]",
+        text,
+    )
+    text = re.sub(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        "[REDACTED_EMAIL]",
+        text,
+    )
+    return text[:240]
