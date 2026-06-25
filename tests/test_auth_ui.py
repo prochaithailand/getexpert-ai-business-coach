@@ -234,8 +234,12 @@ class AuthUiTests(unittest.TestCase):
         next(item for item in app.button if item.label == "เข้าสู่ระบบ").click().run()
 
         self.assertEqual(app.session_state[AUTH_USER_KEY]["email"], "new@example.com")
-        self.assertNotIn("หน้าแรก", app.radio[0].options)
-        self.assertIn("ชำระเงิน / เปิดใช้งาน", app.radio[0].options)
+        self.assertEqual(
+            app.session_state[AUTH_USER_KEY]["subscription_status"],
+            "trialing",
+        )
+        self.assertIn("หน้าแรก", app.radio[0].options)
+        self.assertNotIn("ชำระเงิน / เปิดใช้งาน", app.radio[0].options)
         self.assertIn("โปรไฟล์สมาชิก", app.radio[0].options)
         self.assertIn("ออกจากระบบ", app.radio[0].options)
         self.assertNotIn("Team Dashboard", app.radio[0].options)

@@ -28,8 +28,11 @@ class AuthServiceTests(unittest.TestCase):
         supabase.load_user_data.assert_called_once_with(state, authenticated)
         self.assertEqual(state["pending_invite_code"], "INVITE123")
         self.assertEqual(user.role, "Member")
-        self.assertEqual(user.subscription_status, "pending_payment")
+        self.assertEqual(user.subscription_status, "trialing")
         self.assertEqual(user.subscription_plan, "Member")
+        self.assertTrue(user.trial_used)
+        self.assertTrue(user.trial_started_at)
+        self.assertTrue(user.trial_ends_at)
 
     def test_registration_defaults_to_member_and_hashes_password(self) -> None:
         state = {}

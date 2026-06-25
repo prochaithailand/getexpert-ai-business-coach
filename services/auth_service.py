@@ -15,6 +15,7 @@ from services.subscription_service import (
     apply_subscription_action,
     effective_subscription_status,
     normalize_subscription_user,
+    start_trial,
 )
 
 
@@ -54,10 +55,10 @@ class SessionUserStore:
         if self.supabase and self.supabase.enabled:
             payload = self.supabase.sign_up(normalized_email, password, full_name.strip())
             auth_user = payload.get("user", {})
-            user = AppUser(
+            user = start_trial(AppUser(
                 normalized_email, full_name.strip(), "Member", "",
                 subscription_status="pending_payment", subscription_plan="Member",
-            )
+            ))
             users = dict(self.state.get(USER_STORE_KEY, {}))
             users[normalized_email] = user.to_dict()
             self.state[USER_STORE_KEY] = users
@@ -73,14 +74,14 @@ class SessionUserStore:
         users = dict(self.state.get(USER_STORE_KEY, {}))
         if normalized_email in users:
             raise ValueError("อีเมลนี้มีบัญชีอยู่แล้ว")
-        user = AppUser(
+        user = start_trial(AppUser(
             email=normalized_email,
             full_name=full_name.strip(),
             role="Member",
             password_hash=_hash_password(password),
             subscription_status="pending_payment",
             subscription_plan="Member",
-        )
+        ))
         users[normalized_email] = user.to_dict()
         self.state[USER_STORE_KEY] = users
         return user

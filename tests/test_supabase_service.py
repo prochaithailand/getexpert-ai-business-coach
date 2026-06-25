@@ -27,6 +27,7 @@ class SupabaseServiceTests(unittest.TestCase):
         service.update_user_subscription(user.email, user, "admin-token")
         self.assertEqual(requests[0].method, "PATCH")
         self.assertIn("subscription_status", requests[0].read().decode())
+        self.assertIn("trial_used", requests[0].read().decode())
         self.assertNotIn("password", requests[0].read().decode())
 
     def test_request_password_reset_uses_supabase_recover_and_redirect_url(self) -> None:

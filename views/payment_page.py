@@ -21,6 +21,7 @@ def render_payment_page(user: AppUser) -> None:
     labels = {
         "pending_payment": "รอชำระเงิน / รออนุมัติ",
         "active": "เปิดใช้งานแล้ว",
+        "trialing": "ทดลองใช้ฟรี",
         "expired": "หมดอายุ",
         "suspended": "ถูกระงับ",
     }
@@ -28,6 +29,8 @@ def render_payment_page(user: AppUser) -> None:
     st.write(f"แพ็กเกจปัจจุบัน: **{user.subscription_plan or 'Member'}**")
     if user.subscription_expires_at:
         st.write(f"ใช้งานได้ถึง: **{user.subscription_expires_at[:10]}**")
+    if user.trial_ends_at:
+        st.write(f"สิทธิ์ทดลองใช้ฟรีถึง: **{user.trial_ends_at[:10]}**")
     st.metric("ค่าบริการแพ็กเกจ Member", "89 บาท / เดือน")
     st.write(
         "กรุณาสแกน QR Code เพื่อชำระเงิน 89 บาท หลังจากชำระเงินแล้ว "

@@ -10,6 +10,7 @@ from services.supabase_service import SupabaseError
 from services.subscription_service import (
     effective_subscription_status,
     normalize_subscription_user,
+    trial_days_remaining,
 )
 
 
@@ -140,6 +141,7 @@ def render_account_settings(store: SessionUserStore, user: AppUser | None) -> No
     status = effective_subscription_status(user)
     status_label = {
         "active": "ใช้งานอยู่",
+        "trialing": "ทดลองใช้ฟรี",
         "pending_payment": "รอชำระเงิน / รออนุมัติ",
         "expired": "หมดอายุ",
         "suspended": "ถูกระงับ",
@@ -148,6 +150,12 @@ def render_account_settings(store: SessionUserStore, user: AppUser | None) -> No
     st.write(f"สถานะสมาชิก: **{status_label}**")
     if user.subscription_expires_at:
         st.write(f"ใช้งานได้ถึง: **{user.subscription_expires_at[:10]}**")
+    if user.trial_ends_at:
+        if status == "trialing":
+            st.write(f"วันหมดอายุทดลองใช้ฟรี: **{user.trial_ends_at[:10]}**")
+            st.write(f"เหลือเวลาทดลองใช้ฟรี: **{trial_days_remaining(user)} วัน**")
+        elif user.trial_used and status == "expired" and not user.subscription_expires_at:
+            st.warning("สิทธิ์ทดลองใช้ฟรีหมดอายุแล้ว กรุณาชำระเงินเพื่อใช้งานระบบต่อ")
     st.subheader("เปลี่ยนรหัสผ่าน")
     st.caption(f"บัญชี: {user.email}")
     with st.form("change_password_form", clear_on_submit=True):
@@ -204,6 +212,7 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
                 f"หมดอายุ: **{account.subscription_expires_at[:10] or '-'}**  \n"
                 f"อนุมัติโดย: **{account.approved_by or '-'}**  \n"
                 f"อนุมัติเมื่อ: **{account.approved_at[:10] or '-'}**"
+                f"  \nทดลองใช้ถึง: **{account.trial_ends_at[:10] or '-'}**"
             )
             for label, target_role in _role_actions_for(account, user):
                 if action.button(

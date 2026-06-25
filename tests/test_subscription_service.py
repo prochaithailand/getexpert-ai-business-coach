@@ -11,6 +11,8 @@ from services.subscription_service import (
     effective_subscription_status,
     has_active_subscription,
     normalize_subscription_user,
+    start_trial,
+    trial_days_remaining,
 )
 from views.payment_page import LINE_OA_URL
 
@@ -99,3 +101,50 @@ class SubscriptionServiceTests(unittest.TestCase):
             datetime.fromisoformat(renewed.subscription_expires_at),
             now + timedelta(days=60),
         )
+
+    def test_trial_is_active_for_seven_days_then_expires(self):
+        now = datetime(2026, 6, 25, 8, tzinfo=timezone.utc)
+        trial = start_trial(AppUser("trial@example.com", "Trial"), now)
+
+        self.assertEqual(trial.subscription_status, "trialing")
+        self.assertTrue(trial.trial_used)
+        self.assertEqual(datetime.fromisoformat(trial.trial_ends_at), now + timedelta(days=7))
+        self.assertTrue(has_active_subscription(trial, now + timedelta(days=6)))
+        self.assertEqual(trial_days_remaining(trial, now), 7)
+        self.assertEqual(
+            effective_subscription_status(trial, now + timedelta(days=8)),
+            "expired",
+        )
+        self.assertFalse(has_active_subscription(trial, now + timedelta(days=8)))
+
+    def test_trial_cannot_be_started_twice(self):
+        used = AppUser("used@example.com", "Used", trial_used=True)
+        with self.assertRaisesRegex(ValueError, "เคยใช้สิทธิ์"):
+            start_trial(used)
+
+    def test_trial_navigation_matches_active_user(self):
+        items = (
+            "หน้าแรก",
+            "ชำระเงิน / เปิดใช้งาน",
+            "Dashboard สมาชิก",
+            "ตั้งค่าบัญชี",
+        )
+        now = datetime(2026, 6, 25, tzinfo=timezone.utc)
+        trial = start_trial(AppUser("trial@example.com", "Trial"), now)
+        navigation = visible_navigation(items, trial)
+
+        self.assertIn("หน้าแรก", navigation)
+        self.assertIn("Dashboard สมาชิก", navigation)
+        self.assertNotIn("ชำระเงิน / เปิดใช้งาน", navigation)
+
+    def test_admin_approval_converts_trial_to_paid_active(self):
+        now = datetime(2026, 6, 25, tzinfo=timezone.utc)
+        trial = start_trial(AppUser("trial@example.com", "Trial"), now)
+        approved = apply_subscription_action(trial, "approve", "admin@example.com", now)
+
+        self.assertEqual(approved.subscription_status, "active")
+        self.assertEqual(
+            datetime.fromisoformat(approved.subscription_expires_at),
+            now + timedelta(days=30),
+        )
+        self.assertTrue(approved.trial_used)

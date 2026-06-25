@@ -76,6 +76,9 @@ class AppUser:
     last_payment_at: str = ""
     approved_by: str = ""
     approved_at: str = ""
+    trial_started_at: str = ""
+    trial_ends_at: str = ""
+    trial_used: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

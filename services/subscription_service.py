@@ -7,7 +7,8 @@ from models import AppUser
 
 
 LOCKED_MESSAGE = "กรุณาชำระเงินและรอการอนุมัติก่อนใช้งานระบบ"
-ACTIVE_STATUSES = {"active"}
+ACTIVE_STATUSES = {"active", "trialing"}
+TRIAL_DAYS = 7
 
 
 def normalize_subscription_user(user: AppUser) -> AppUser:
@@ -31,6 +32,9 @@ def normalize_subscription_user(user: AppUser) -> AppUser:
         last_payment_at=str(getattr(user, "last_payment_at", "") or ""),
         approved_by=str(getattr(user, "approved_by", "") or ""),
         approved_at=str(getattr(user, "approved_at", "") or ""),
+        trial_started_at=str(getattr(user, "trial_started_at", "") or ""),
+        trial_ends_at=str(getattr(user, "trial_ends_at", "") or ""),
+        trial_used=bool(getattr(user, "trial_used", False)),
     )
 
 
@@ -39,6 +43,15 @@ def effective_subscription_status(user: AppUser, now: datetime | None = None) ->
     if user.role == "Admin":
         return "active"
     status = getattr(user, "subscription_status", "active") or "active"
+    if status == "trialing":
+        trial_ends_at = getattr(user, "trial_ends_at", "") or ""
+        if not trial_ends_at:
+            return "expired"
+        try:
+            trial_end = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
+            return "expired" if trial_end < (now or datetime.now(timezone.utc)) else "trialing"
+        except ValueError:
+            return "expired"
     expires_at = getattr(user, "subscription_expires_at", "") or ""
     if status == "active" and expires_at:
         try:
@@ -51,7 +64,38 @@ def effective_subscription_status(user: AppUser, now: datetime | None = None) ->
 
 
 def has_active_subscription(user: AppUser, now: datetime | None = None) -> bool:
-    return getattr(user, "role", "Member") == "Admin" or effective_subscription_status(user, now) == "active"
+    return (
+        getattr(user, "role", "Member") == "Admin"
+        or effective_subscription_status(user, now) in ACTIVE_STATUSES
+    )
+
+
+def start_trial(user: AppUser, now: datetime | None = None) -> AppUser:
+    user = normalize_subscription_user(user)
+    if user.trial_used:
+        raise ValueError("บัญชีนี้เคยใช้สิทธิ์ทดลองใช้ฟรีแล้ว")
+    current = now or datetime.now(timezone.utc)
+    return replace(
+        user,
+        subscription_status="trialing",
+        trial_started_at=current.isoformat(),
+        trial_ends_at=(current + timedelta(days=TRIAL_DAYS)).isoformat(),
+        trial_used=True,
+    )
+
+
+def trial_days_remaining(user: AppUser, now: datetime | None = None) -> int:
+    user = normalize_subscription_user(user)
+    if not user.trial_ends_at:
+        return 0
+    try:
+        end = datetime.fromisoformat(user.trial_ends_at.replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    seconds = (end - (now or datetime.now(timezone.utc))).total_seconds()
+    if seconds <= 0:
+        return 0
+    return max(1, int((seconds + 86399) // 86400))
 
 
 def apply_subscription_action(
