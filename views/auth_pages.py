@@ -23,19 +23,35 @@ from services.subscription_service import (
 def render_login(store: SessionUserStore) -> None:
     st.title("เข้าสู่ระบบ")
     st.markdown("<p class='section-lead'>เข้าสู่ระบบเพื่อใช้งานระบบพัฒนาธุรกิจ GetExpert</p>", unsafe_allow_html=True)
+    login_in_progress = bool(st.session_state.get("login_in_progress", False))
+    if login_in_progress:
+        st.info("กำลังเข้าสู่ระบบ กรุณารอสักครู่...")
     with st.form("login_form"):
         email = st.text_input("อีเมล", placeholder="name@example.com")
         password = st.text_input("รหัสผ่าน", type="password")
-        submitted = st.form_submit_button("เข้าสู่ระบบ", type="primary", width="stretch")
-    if submitted:
+        submitted = st.form_submit_button(
+            "กำลังเข้าสู่ระบบ..." if login_in_progress else "เข้าสู่ระบบ",
+            type="primary",
+            width="stretch",
+            disabled=login_in_progress,
+        )
+    if submitted and not login_in_progress:
+        st.session_state["login_in_progress"] = True
+        st.info("กำลังเข้าสู่ระบบ กรุณารอสักครู่...")
         try:
             user = store.authenticate(email, password)
         except SupabaseError as error:
+            st.session_state["login_in_progress"] = False
             st.error(f"ไม่สามารถเข้าสู่ระบบผ่าน Supabase ได้: {error}")
             return
+        except Exception:
+            st.session_state["login_in_progress"] = False
+            raise
         if user:
+            st.session_state["login_in_progress"] = False
             st.success(f"เข้าสู่ระบบสำเร็จ ยินดีต้อนรับคุณ{user.full_name}")
             st.rerun()
+        st.session_state["login_in_progress"] = False
         st.error("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
 
 

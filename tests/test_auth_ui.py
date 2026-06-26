@@ -81,7 +81,72 @@ def render_reset_password_page() -> None:
     )
 
 
+def render_login_page_with_failed_auth() -> None:
+    import streamlit as st
+
+    from views.auth_pages import render_login
+
+    class FakeStore:
+        def authenticate(self, email: str, password: str):
+            st.session_state["login_attempt_email"] = email
+            st.session_state["login_attempt_password"] = password
+            return None
+
+    render_login(FakeStore())
+
+
+def render_login_page_already_in_progress() -> None:
+    import streamlit as st
+
+    from views.auth_pages import render_login
+
+    class FakeStore:
+        def authenticate(self, email: str, password: str):
+            st.session_state["unexpected_login_attempt"] = True
+            return None
+
+    st.session_state["login_in_progress"] = True
+    render_login(FakeStore())
+
+
 class AuthUiTests(unittest.TestCase):
+    def test_login_in_progress_disables_submit_and_shows_status(self) -> None:
+        app = AppTest.from_function(
+            render_login_page_already_in_progress,
+            default_timeout=10,
+        ).run()
+
+        submit = next(
+            item
+            for item in app.button
+            if item.label == "กำลังเข้าสู่ระบบ..."
+        )
+        self.assertTrue(submit.disabled)
+        self.assertTrue(
+            any("กำลังเข้าสู่ระบบ กรุณารอสักครู่" in item.value for item in app.info)
+        )
+        self.assertNotIn("unexpected_login_attempt", app.session_state)
+
+    def test_failed_login_resets_in_progress_state(self) -> None:
+        app = AppTest.from_function(
+            render_login_page_with_failed_auth,
+            default_timeout=10,
+        ).run()
+
+        next(item for item in app.text_input if item.label == "อีเมล").set_value(
+            "member@example.com"
+        )
+        next(item for item in app.text_input if item.label == "รหัสผ่าน").set_value(
+            "wrong-password"
+        )
+        next(item for item in app.button if item.label == "เข้าสู่ระบบ").click().run()
+
+        self.assertEqual(app.session_state["login_attempt_email"], "member@example.com")
+        self.assertFalse(app.session_state["login_in_progress"])
+        self.assertTrue(
+            any("อีเมลหรือรหัสผ่านไม่ถูกต้อง" in item.value for item in app.error)
+        )
+
     def test_forgot_password_form_sends_email_with_configured_redirect(self) -> None:
         app = AppTest.from_function(
             render_forgot_password_page,
