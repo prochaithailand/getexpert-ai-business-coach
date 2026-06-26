@@ -20,10 +20,13 @@ from services.auth_service import SessionUserStore, recovery_params_from_query
 from services.knowledge_service import KnowledgeService
 from services.openai_coach_service import OpenAICoachService
 from services.openai_runtime_service import (
-    GLOBAL_OPENAI_STATE,
     OpenAIRuntimeService,
     load_openai_config,
 )
+try:
+    from services.openai_runtime_service import GLOBAL_OPENAI_STATE
+except ImportError:
+    GLOBAL_OPENAI_STATE = {}
 from services.profile_repository import SessionProfileRepository
 from services.permissions import visible_navigation
 from services.subscription_service import LOCKED_MESSAGE, has_active_subscription
