@@ -143,6 +143,8 @@ class AuthUiTests(unittest.TestCase):
 
         self.assertEqual(app.session_state["login_attempt_email"], "member@example.com")
         self.assertFalse(app.session_state["login_in_progress"])
+        self.assertNotIn("pending_login_email", app.session_state)
+        self.assertNotIn("pending_login_password", app.session_state)
         self.assertTrue(
             any("อีเมลหรือรหัสผ่านไม่ถูกต้อง" in item.value for item in app.error)
         )
