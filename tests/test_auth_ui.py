@@ -6,7 +6,10 @@ from streamlit.testing.v1 import AppTest
 from services.auth_service import AUTH_USER_KEY, USER_STORE_KEY
 from services.settings_service import SupabaseConfig
 from models import AppUser
+from views.auth_pages import _filter_user_accounts
+from views.auth_pages import _paginate_user_accounts
 from views.auth_pages import _role_actions_for
+from views.auth_pages import _user_management_summary
 from views.auth_pages import render_account_settings
 
 
@@ -273,6 +276,94 @@ class AuthUiTests(unittest.TestCase):
         self.assertIn(("ลดสิทธิ์เป็นผู้นำ", "Leader"), other_admin_actions)
         self.assertIn(("ลดสิทธิ์เป็นสมาชิก", "Member"), other_admin_actions)
         self.assertEqual(current_admin_actions, ())
+
+    def test_admin_user_management_summary_counts_key_segments(self) -> None:
+        accounts = [
+            AppUser("member@example.com", "Member", "Member", subscription_status="trialing"),
+            AppUser("leader@example.com", "Leader", "Leader", subscription_status="active"),
+            AppUser("partner@example.com", "Partner", "Partner", subscription_status="pending_payment"),
+            AppUser("admin@example.com", "Admin", "Admin", subscription_status="active"),
+            AppUser("blocked@example.com", "Blocked", "Member", subscription_status="suspended"),
+        ]
+
+        summary = _user_management_summary(accounts)
+
+        self.assertEqual(summary["total"], 5)
+        self.assertEqual(summary["trialing"], 1)
+        self.assertEqual(summary["active"], 2)
+        self.assertEqual(summary["pending_payment"], 1)
+        self.assertEqual(summary["partner"], 1)
+        self.assertEqual(summary["leader"], 1)
+        self.assertEqual(summary["suspended"], 1)
+
+    def test_admin_user_management_filters_by_search_role_status_and_plan(self) -> None:
+        accounts = [
+            AppUser(
+                "alpha@example.com",
+                "Alpha Member",
+                "Member",
+                subscription_status="trialing",
+                subscription_plan="Member",
+            ),
+            AppUser(
+                "beta@example.com",
+                "Beta Leader",
+                "Leader",
+                subscription_status="active",
+                subscription_plan="Leader",
+            ),
+            AppUser(
+                "partner@example.com",
+                "Gamma Partner",
+                "Partner",
+                subscription_status="active",
+                subscription_plan="Member",
+            ),
+        ]
+
+        self.assertEqual(
+            [account.email for account in _filter_user_accounts(accounts, search_query="beta")],
+            ["beta@example.com"],
+        )
+        self.assertEqual(
+            [account.email for account in _filter_user_accounts(accounts, role_filter="Partner")],
+            ["partner@example.com"],
+        )
+        self.assertEqual(
+            [
+                account.email
+                for account in _filter_user_accounts(
+                    accounts,
+                    status_filter="active",
+                    plan_filter="Member",
+                )
+            ],
+            ["partner@example.com"],
+        )
+
+    def test_admin_user_management_pagination_defaults_to_twenty_and_clamps_page(self) -> None:
+        accounts = [
+            AppUser(f"user{index}@example.com", f"User {index}", "Member")
+            for index in range(1, 46)
+        ]
+
+        first_page, page, start, end, total_pages = _paginate_user_accounts(
+            accounts,
+            page=1,
+            page_size=20,
+        )
+        last_page, last_page_number, last_start, last_end, _ = _paginate_user_accounts(
+            accounts,
+            page=99,
+            page_size=20,
+        )
+
+        self.assertEqual(len(first_page), 20)
+        self.assertEqual(page, 1)
+        self.assertEqual((start, end, total_pages), (1, 20, 3))
+        self.assertEqual(last_page_number, 3)
+        self.assertEqual((last_start, last_end), (41, 45))
+        self.assertEqual([account.email for account in last_page], [f"user{index}@example.com" for index in range(41, 46)])
 
     @patch("services.settings_service.load_supabase_config", return_value=SupabaseConfig())
     def test_guest_sees_only_login_and_registration_then_can_sign_in(self, _mock_load) -> None:

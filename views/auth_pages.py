@@ -75,9 +75,11 @@ def render_login(store: SessionUserStore) -> None:
         st.rerun()
 
 
-def render_register(store: SessionUserStore) -> None:
+def render_register(store: SessionUserStore, referral_code: str = "") -> None:
     st.title("สมัครสมาชิก")
     st.markdown("<p class='section-lead'>สร้างบัญชีใหม่เพื่อเริ่มต้นใช้งานระบบ บัญชีใหม่จะเป็นสมาชิกโดยอัตโนมัติ</p>", unsafe_allow_html=True)
+    if referral_code:
+        st.info("ลิงก์แนะนำนี้ใช้สำหรับบันทึกสิทธิ์ referral เท่านั้น ไม่ได้เพิ่มคุณเข้าทีมโดยอัตโนมัติ")
     with st.form("register_form"):
         full_name = st.text_input("ชื่อ-นามสกุล", placeholder="ชื่อและนามสกุลของคุณ")
         email = st.text_input("อีเมล", placeholder="name@example.com")
@@ -100,6 +102,7 @@ def render_register(store: SessionUserStore) -> None:
                 password,
                 full_name,
                 marketing_email_opt_in=marketing_email_opt_in,
+                referral_code=referral_code,
             )
         except (ValueError, SupabaseError) as error:
             st.warning(str(error))
@@ -245,6 +248,163 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
         st.warning(UNAUTHORIZED_MESSAGE)
         return
     st.markdown(
+        "<p class='section-lead'>จัดการสิทธิ์ผู้ใช้ สถานะสมาชิก และการอนุมัติการใช้งานในรูปแบบที่ค้นหาและจัดการได้ง่ายขึ้น</p>",
+        unsafe_allow_html=True,
+    )
+    openai_config = load_openai_config(
+        st.secrets,
+        os.environ,
+        default_responses_model=DEFAULT_OPENAI_MODEL,
+        default_embedding_model=DEFAULT_EMBEDDING_MODEL,
+    )
+    _render_openai_diagnostic(get_openai_diagnostic_health(openai_config))
+
+    accounts = [normalize_subscription_user(account) for account in store.list_users()]
+    summary = _user_management_summary(accounts)
+    summary_labels = (
+        ("ผู้ใช้ทั้งหมด", summary["total"]),
+        ("Trialing", summary["trialing"]),
+        ("Active", summary["active"]),
+        ("Pending Payment", summary["pending_payment"]),
+        ("Partner", summary["partner"]),
+        ("Leader", summary["leader"]),
+        ("Suspended", summary["suspended"]),
+    )
+    for column, (label, value) in zip(st.columns(len(summary_labels)), summary_labels):
+        column.metric(label, value)
+
+    st.markdown("### ค้นหาและกรองผู้ใช้")
+    search_query = st.text_input(
+        "ค้นหาผู้ใช้",
+        placeholder="ค้นหาด้วยชื่อหรืออีเมล",
+        key="admin_user_search",
+    )
+    filter_columns = st.columns(4)
+    role_filter = filter_columns[0].selectbox(
+        "บทบาท",
+        ("ทั้งหมด", "Member", "Leader", "Partner", "Admin"),
+        key="admin_user_role_filter",
+    )
+    status_filter = filter_columns[1].selectbox(
+        "สถานะสมาชิก",
+        ("ทั้งหมด", "trialing", "active", "pending_payment", "suspended", "expired"),
+        key="admin_user_status_filter",
+    )
+    plan_filter = filter_columns[2].selectbox(
+        "แพ็กเกจ",
+        ("ทั้งหมด", "Member", "Leader"),
+        key="admin_user_plan_filter",
+    )
+    page_size = int(
+        filter_columns[3].selectbox(
+            "จำนวนต่อหน้า",
+            (20, 50, 100),
+            key="admin_user_page_size",
+        )
+    )
+
+    filter_signature = (
+        search_query.strip().casefold(),
+        role_filter,
+        status_filter,
+        plan_filter,
+        page_size,
+    )
+    if st.session_state.get("admin_user_filter_signature") != filter_signature:
+        st.session_state["admin_user_page"] = 1
+        st.session_state["admin_user_filter_signature"] = filter_signature
+
+    filtered_accounts = _filter_user_accounts(
+        accounts,
+        search_query=search_query,
+        role_filter=role_filter,
+        status_filter=status_filter,
+        plan_filter=plan_filter,
+    )
+    current_page = int(st.session_state.get("admin_user_page", 1) or 1)
+    page_accounts, current_page, start_index, end_index, total_pages = _paginate_user_accounts(
+        filtered_accounts,
+        page=current_page,
+        page_size=page_size,
+    )
+    st.session_state["admin_user_page"] = current_page
+
+    st.caption(f"แสดง {start_index}-{end_index} จาก {len(filtered_accounts)} คน")
+    previous_column, page_column, next_column = st.columns([1, 2, 1])
+    if previous_column.button(
+        "ก่อนหน้า",
+        key="admin_user_previous_page",
+        disabled=current_page <= 1,
+        width="stretch",
+    ):
+        st.session_state["admin_user_page"] = current_page - 1
+        st.rerun()
+    page_column.markdown(
+        f"<p style='text-align:center;margin-top:0.45rem;'>หน้า {current_page} / {total_pages}</p>",
+        unsafe_allow_html=True,
+    )
+    if next_column.button(
+        "ถัดไป",
+        key="admin_user_next_page",
+        disabled=current_page >= total_pages,
+        width="stretch",
+    ):
+        st.session_state["admin_user_page"] = current_page + 1
+        st.rerun()
+
+    if not page_accounts:
+        st.info("ไม่พบผู้ใช้ที่ตรงกับเงื่อนไข")
+        return
+
+    for account in page_accounts:
+        with st.container(border=True):
+            name_column, role_column, subscription_column, expiry_column = st.columns([2.5, 1.1, 1.8, 1.4])
+            name_column.markdown(f"**{account.full_name or '-'}**  \n{account.email}")
+            role_column.markdown(
+                f"บทบาท: **{_role_label(account.role)}**  \nReferral Rate: **{_referral_rate_for(account)}%**"
+            )
+            subscription_column.markdown(
+                f"สถานะ: **{account.subscription_status or '-'}**  \nแพ็กเกจ: **{account.subscription_plan or '-'}**"
+            )
+            expiry_column.markdown(_account_expiry_summary(account))
+
+            with st.expander("จัดการผู้ใช้นี้", expanded=False):
+                action_columns = st.columns(2)
+                action_index = 0
+                for label, target_role in _role_actions_for(account, user):
+                    column = action_columns[action_index % len(action_columns)]
+                    action_index += 1
+                    if column.button(
+                        label,
+                        key=f"set_role_{target_role}_{account.email}",
+                        width="stretch",
+                        type="primary" if target_role == "Partner" else "secondary",
+                    ):
+                        _apply_role_change(store, user, account, target_role)
+                        return
+                for label, action_name in _subscription_actions_for(account):
+                    column = action_columns[action_index % len(action_columns)]
+                    action_index += 1
+                    if column.button(
+                        label,
+                        key=f"subscription_{action_name}_{account.email}",
+                        width="stretch",
+                    ):
+                        try:
+                            store.update_subscription(user.email, account.email, action_name)
+                        except (PermissionError, KeyError, ValueError, SupabaseError) as error:
+                            st.warning(str(error))
+                            return
+                        st.success(f"อัปเดตสถานะการใช้งานของ {account.full_name} แล้ว")
+                        st.rerun()
+
+
+def _render_user_management_legacy(store: SessionUserStore, user: AppUser) -> None:
+    st.title("จัดการผู้ใช้")
+    if user.role != "Admin":
+        st.warning(UNAUTHORIZED_MESSAGE)
+        return
+    st.markdown(
         "<p class='section-lead'>กำหนดสิทธิ์สมาชิก ผู้นำ Partner และผู้ดูแลระบบ "
         "โดยผู้ดูแลระบบที่มีอยู่แล้ว</p>",
         unsafe_allow_html=True,
@@ -298,6 +458,84 @@ def render_user_management(store: SessionUserStore, user: AppUser) -> None:
                         return
                     st.success(f"อัปเดตสถานะการใช้งานของ {account.full_name} แล้ว")
                     st.rerun()
+
+
+def _role_label(role: str) -> str:
+    return {
+        "Member": "สมาชิก",
+        "Leader": "ผู้นำ",
+        "Partner": "Partner",
+        "Admin": "ผู้ดูแลระบบ",
+    }.get(role, role or "-")
+
+
+def _referral_rate_for(account: AppUser) -> int:
+    if account.role == "Partner":
+        return 15
+    if account.role == "Leader":
+        return 8
+    return 0
+
+
+def _safe_date(value: str) -> str:
+    return value[:10] if value else "-"
+
+
+def _account_expiry_summary(account: AppUser) -> str:
+    if account.subscription_status == "trialing":
+        return f"ทดลองใช้ถึง: **{_safe_date(account.trial_ends_at)}**"
+    return f"หมดอายุ: **{_safe_date(account.subscription_expires_at)}**"
+
+
+def _user_management_summary(accounts: list[AppUser]) -> dict[str, int]:
+    return {
+        "total": len(accounts),
+        "trialing": sum(1 for account in accounts if account.subscription_status == "trialing"),
+        "active": sum(1 for account in accounts if account.subscription_status == "active"),
+        "pending_payment": sum(1 for account in accounts if account.subscription_status == "pending_payment"),
+        "partner": sum(1 for account in accounts if account.role == "Partner"),
+        "leader": sum(1 for account in accounts if account.role == "Leader"),
+        "suspended": sum(1 for account in accounts if account.subscription_status == "suspended"),
+    }
+
+
+def _filter_user_accounts(
+    accounts: list[AppUser],
+    *,
+    search_query: str = "",
+    role_filter: str = "ทั้งหมด",
+    status_filter: str = "ทั้งหมด",
+    plan_filter: str = "ทั้งหมด",
+) -> list[AppUser]:
+    query = search_query.strip().casefold()
+    results: list[AppUser] = []
+    for account in accounts:
+        if query and query not in f"{account.full_name} {account.email}".casefold():
+            continue
+        if role_filter != "ทั้งหมด" and account.role != role_filter:
+            continue
+        if status_filter != "ทั้งหมด" and account.subscription_status != status_filter:
+            continue
+        if plan_filter != "ทั้งหมด" and account.subscription_plan != plan_filter:
+            continue
+        results.append(account)
+    return results
+
+
+def _paginate_user_accounts(
+    accounts: list[AppUser],
+    *,
+    page: int,
+    page_size: int = 20,
+) -> tuple[list[AppUser], int, int, int, int]:
+    safe_page_size = max(1, page_size)
+    total_pages = max(1, (len(accounts) + safe_page_size - 1) // safe_page_size)
+    current_page = min(max(1, page), total_pages)
+    offset = (current_page - 1) * safe_page_size
+    page_accounts = accounts[offset:offset + safe_page_size]
+    if not accounts:
+        return page_accounts, current_page, 0, 0, total_pages
+    return page_accounts, current_page, offset + 1, offset + len(page_accounts), total_pages
 
 
 # Test deployment marker: OpenAI diagnostic success-rate UI.
