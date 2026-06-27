@@ -61,9 +61,11 @@ class OpenAICoachServiceTests(unittest.TestCase):
 
     def test_api_request_contains_identity_profile_history_and_knowledge(self) -> None:
         responses = FakeResponses(
-            "**สรุปคำตอบ**\nควรเริ่มจากการวางแผนที่ทำได้จริง\n\n"
-            "**ประเด็นสำคัญ**\n- จัดทำรายชื่อผู้มุ่งหวัง\n- ติดตามผลอย่างสม่ำเสมอ\n\n"
-            "**แนวทางนำไปใช้**\n- เริ่มพูดคุยวันละ 3 ราย"
+            "🎯 Executive Summary\nควรเริ่มจากการวางแผนที่ทำได้จริง\n\n"
+            "──────────────\n\n"
+            "📖 รายละเอียด\n- จัดทำรายชื่อผู้มุ่งหวัง\n- ติดตามผลอย่างสม่ำเสมอ\n\n"
+            "──────────────\n\n"
+            "✅ สิ่งที่ควรทำต่อ\n1. เริ่มพูดคุยวันละ 3 ราย"
         )
         service = OpenAICoachService(
             StubKnowledgeService([self.match]),
@@ -102,10 +104,12 @@ class OpenAICoachServiceTests(unittest.TestCase):
         self.assertIn("หนังสือ 5 โมดูลธุรกิจ MLM", call["input"][-1]["content"])
         self.assertNotIn("C:\\", call["input"][-1]["content"])
         self.assertIn("สรุปความหมาย", call["instructions"])
-        self.assertIn("**ประเด็นสำคัญ**", call["instructions"])
         self.assertIn("🎯 Executive Summary", call["instructions"])
         self.assertIn("📖 รายละเอียด", call["instructions"])
         self.assertIn("✅ สิ่งที่ควรทำต่อ", call["instructions"])
+        self.assertNotIn("**สรุปคำตอบ**", call["instructions"])
+        self.assertNotIn("**ประเด็นสำคัญ**", call["instructions"])
+        self.assertNotIn("**แนวทางนำไปใช้**", call["instructions"])
         self.assertIn("ต้องใช้หัวข้อ 3 บรรทัดนี้แบบตรงตัว", call["instructions"])
         self.assertIn("ห้ามเปลี่ยนคำ", call["instructions"])
         self.assertIn("ห้ามใช้หัวข้อแทน เช่น สรุปคำตอบ หรือ แนวทางนำไปใช้", call["instructions"])
@@ -135,9 +139,11 @@ class OpenAICoachServiceTests(unittest.TestCase):
 
     def test_workplan_question_sends_member_activity_without_pdf_matches(self) -> None:
         responses = FakeResponses(
-            "**สรุปคำตอบ**\nมีข้อมูล Workplan แล้ว\n\n"
-            "**ประเด็นสำคัญ**\n- รายชื่อ A มี 3 ราย\n\n"
-            "**แนวทางนำไปใช้**\n- ติดตามผลวันนี้"
+            "🎯 Executive Summary\nมีข้อมูล Workplan แล้ว\n\n"
+            "──────────────\n\n"
+            "📖 รายละเอียด\n- รายชื่อ A มี 3 ราย\n\n"
+            "──────────────\n\n"
+            "✅ สิ่งที่ควรทำต่อ\n1. ติดตามผลวันนี้"
         )
         service = OpenAICoachService(StubKnowledgeService([]), client=FakeClient(responses))
         context = MemberActivityContext(
@@ -181,9 +187,11 @@ class OpenAICoachServiceTests(unittest.TestCase):
         for question in questions:
             with self.subTest(question=question):
                 responses = FakeResponses(
-                    "**สรุปคำตอบ**\nสรุปจากคลังความรู้\n\n"
-                    "**ประเด็นสำคัญ**\n- เรียนรู้เป็นขั้นตอน\n\n"
-                    "**แนวทางนำไปใช้**\n- เริ่มลงมือทำวันนี้"
+                    "🎯 Executive Summary\nสรุปจากคลังความรู้\n\n"
+                    "──────────────\n\n"
+                    "📖 รายละเอียด\n- เรียนรู้เป็นขั้นตอน\n\n"
+                    "──────────────\n\n"
+                    "✅ สิ่งที่ควรทำต่อ\n1. เริ่มลงมือทำวันนี้"
                 )
                 service = OpenAICoachService(
                     StubKnowledgeService([self.match]),
@@ -193,8 +201,12 @@ class OpenAICoachServiceTests(unittest.TestCase):
                 result = service.answer_question(question, self.profile)
 
                 self.assertEqual(len(responses.calls), 1)
-                self.assertIn(question, responses.calls[0]["input"][-1]["content"])
-                for section in ("**สรุปคำตอบ**", "**ประเด็นสำคัญ**", "**แนวทางนำไปใช้**", "**แหล่งข้อมูลอ้างอิง**"):
+                request = responses.calls[0]
+                self.assertIn(question, request["input"][-1]["content"])
+                for old_heading in ("**สรุปคำตอบ**", "**ประเด็นสำคัญ**", "**แนวทางนำไปใช้**"):
+                    self.assertNotIn(old_heading, request["instructions"])
+                    self.assertNotIn(old_heading, result.answer)
+                for section in ("🎯 Executive Summary", "📖 รายละเอียด", "✅ สิ่งที่ควรทำต่อ", "**แหล่งข้อมูลอ้างอิง**"):
                     self.assertIn(section, result.answer)
                 self.assertTrue(result.answer.rstrip().endswith("- หนังสือ 5 โมดูลธุรกิจ MLM"))
 
