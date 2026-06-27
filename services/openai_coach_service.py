@@ -167,6 +167,7 @@ class OpenAICoachService(LocalCoachService):
 ห้ามแต่งชื่อ ตัวเลข สถานะ หรือรับรองรายได้ หากข้อมูลไม่พอให้บอกอย่างตรงไปตรงมา
 ตอบด้วย bullet points และระบุสิ่งที่ควรทำต่ออย่างชัดเจน
 """.strip()
+        instructions = f"{instructions}\n\n{self._business_coach_answer_format_instruction()}"
         messages = [
             {"role": item.get("role"), "content": str(item.get("content", ""))[:1200]}
             for item in history[-6:]
@@ -323,6 +324,7 @@ class OpenAICoachService(LocalCoachService):
         activity_context: MemberActivityContext | None = None,
     ) -> str:
         member = profile or MemberProfile()
+        format_rule = OpenAICoachService._business_coach_answer_format_instruction()
         knowledge_rule = (
             "มีข้อมูลจากคลังความรู้แนบมากับคำถาม ให้ใช้เป็นความรู้สนับสนุนและห้ามอ้างเอกสารอื่นที่ไม่ได้แนบมา"
             if has_knowledge
@@ -342,6 +344,7 @@ class OpenAICoachService(LocalCoachService):
 - ห้ามเปิดเผยหรือคาดเดาเบอร์โทรศัพท์ และห้ามสร้างข้อมูลผู้มุ่งหวังที่ไม่ได้แนบมา
 - ใช้คลังความรู้เป็นข้อมูลสนับสนุนสำหรับหลักการและคำแนะนำ ไม่ใช้แทนข้อมูลผลงานจริงของสมาชิก
 - {knowledge_rule}
+- {format_rule}
 - สรุปความหมายจากข้อมูลอ้างอิงด้วยภาษาของคุณเอง ห้ามคัดลอกข้อความดิบ ห้ามแสดง OCR noise และห้ามกล่าวถึงชื่อไฟล์หรือ path
 - อธิบายด้วยภาษาไทยง่าย ๆ ประโยคสั้น และหลีกเลี่ยงศัพท์เทคนิคที่ไม่จำเป็น
 - ใช้โครงสร้างคำตอบนี้เสมอ:
@@ -362,6 +365,31 @@ class OpenAICoachService(LocalCoachService):
 - ผู้แนะนำ: {member.sponsor or "ยังไม่ระบุ"}
 - บทบาทในทีม: {member.role}
 - สถานะข้อมูลกิจกรรม: {"มีข้อมูล Workplan ที่บันทึกไว้" if activity_context and activity_context.has_data else "ยังไม่มีข้อมูล Workplan ที่บันทึกไว้"}
+""".strip()
+
+    @staticmethod
+    def _business_coach_answer_format_instruction() -> str:
+        return """
+กฎรูปแบบคำตอบ Phase 3:
+สำหรับคำถามเชิงวิเคราะห์ กลยุทธ์ วางแผนธุรกิจ CRM Workplan Team Dashboard ผู้มุ่งหวัง หรือคำถามที่ต้องการคำตอบยาว ให้ใช้โครงสร้างนี้:
+
+🎯 Executive Summary
+สรุปภาพรวมสั้น ชัดเจน และบอกทิศทางสำคัญ 2-4 ประโยค
+
+──────────────
+
+📖 รายละเอียด
+อธิบายเหตุผล บริบท ข้อมูลที่เกี่ยวข้อง และข้อควรระวังด้วยภาษาไทยที่เข้าใจง่าย
+
+──────────────
+
+✅ สิ่งที่ควรทำต่อ
+1. ระบุ action ที่ทำได้จริง
+2. จัดลำดับความสำคัญ
+3. ระบุสิ่งที่ควรติดตามหรือวัดผล
+
+สำหรับคำถามสั้นหรือคำถามเชิงใช้งานทั่วไป เช่น GetExpert คืออะไร ราคาเท่าไร เมนูนี้คืออะไร หรือควรกดปุ่มไหน ให้ตอบแบบสั้น กระชับ และไม่ต้องใช้ Executive Summary
+หากคำถามเกี่ยวกับรายได้ แผนการจ่าย หรือธุรกิจเครือข่าย ห้ามรับประกันรายได้ ให้ใช้ถ้อยคำว่า “ควรพิจารณา”, “แนวทาง”, “ขึ้นอยู่กับการลงมือทำจริง”
 """.strip()
 
     @staticmethod

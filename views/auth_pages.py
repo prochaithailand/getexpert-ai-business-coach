@@ -102,7 +102,6 @@ def render_register(store: SessionUserStore, referral_code: str = "") -> None:
                 password,
                 full_name,
                 marketing_email_opt_in=marketing_email_opt_in,
-                referral_code=referral_code,
             )
         except (ValueError, SupabaseError) as error:
             st.warning(str(error))

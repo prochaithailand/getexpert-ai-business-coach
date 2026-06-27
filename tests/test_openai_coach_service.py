@@ -103,6 +103,10 @@ class OpenAICoachServiceTests(unittest.TestCase):
         self.assertNotIn("C:\\", call["input"][-1]["content"])
         self.assertIn("สรุปความหมาย", call["instructions"])
         self.assertIn("**ประเด็นสำคัญ**", call["instructions"])
+        self.assertIn("🎯 Executive Summary", call["instructions"])
+        self.assertIn("📖 รายละเอียด", call["instructions"])
+        self.assertIn("✅ สิ่งที่ควรทำต่อ", call["instructions"])
+        self.assertIn("สำหรับคำถามสั้น", call["instructions"])
         self.assertTrue(result.answer.rstrip().endswith("- หนังสือ 5 โมดูลธุรกิจ MLM"))
         self.assertIn("**แหล่งข้อมูลอ้างอิง**", result.answer)
 
@@ -303,6 +307,9 @@ class OpenAICoachServiceTests(unittest.TestCase):
         call = responses.calls[0]
         self.assertIn("Workplan", call["instructions"])
         self.assertIn("คะแนน PP", call["instructions"])
+        self.assertIn("🎯 Executive Summary", call["instructions"])
+        self.assertIn("📖 รายละเอียด", call["instructions"])
+        self.assertIn("✅ สิ่งที่ควรทำต่อ", call["instructions"])
         self.assertEqual(call["input"][0]["content"], history[0]["content"])
         self.assertIn(context, call["input"][-1]["content"])
         self.assertIn("ทีมของผมควรทำอะไรวันนี้", call["input"][-1]["content"])
