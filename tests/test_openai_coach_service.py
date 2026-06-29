@@ -151,7 +151,10 @@ class OpenAICoachServiceTests(unittest.TestCase):
         self.assertEqual(responses.calls, [])
         self.assertIn("ဤမေးခွန်းကို ယုံကြည်စိတ်ချရစွာ ဖြေဆိုရန်", result.answer)
         self.assertIn("အသိပညာအချက်အလက် မလုံလောက်သေးပါ", result.answer)
+        self.assertIn("**ကိုးကားအချက်အလက်များ**", result.answer)
+        self.assertIn("ဆက်စပ်သော အသိပညာစာရွက်စာတမ်း မလုံလောက်သေးပါ", result.answer)
         self.assertNotIn("ฐานความรู้ของระบบยังไม่มีข้อมูลเพียงพอ", result.answer)
+        self.assertNotIn("**แหล่งข้อมูลอ้างอิง**", result.answer)
 
     def test_tglife_english_no_evidence_returns_english_fallback(self) -> None:
         responses = FakeResponses("Should not be called")
@@ -166,6 +169,8 @@ class OpenAICoachServiceTests(unittest.TestCase):
         self.assertEqual(responses.calls, [])
         self.assertIn("does not yet have enough reliable knowledge", result.answer)
         self.assertIn("Please rephrase your question", result.answer)
+        self.assertIn("**References**", result.answer)
+        self.assertIn("No sufficiently relevant knowledge documents were found", result.answer)
         self.assertNotIn("ฐานความรู้ของระบบยังไม่มีข้อมูลเพียงพอ", result.answer)
 
     def test_getexpert_thai_no_evidence_stays_thai_fallback(self) -> None:

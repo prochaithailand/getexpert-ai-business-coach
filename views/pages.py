@@ -15,11 +15,21 @@ from services.onboarding_service import build_onboarding_status
 from services.profile_repository import ProfileRepository
 from services.progress_service import calculate_plan_progress, member_progress_key
 from services.supabase_service import get_authenticated_supabase_user, get_supabase_service, run_supabase_sync
+from translations import translate
 from ui.ai_coaching_pipeline import render_ai_coaching_pipeline
 
 
 def _active_brand() -> dict[str, str]:
     return st.session_state.get("_active_brand", {})
+
+
+def _language() -> str:
+    return str(st.session_state.get("language", "th"))
+
+
+def _t(key: str, **values: object) -> str:
+    text = translate(key, _language())
+    return text.format(**values) if values else text
 
 
 def _page_header(title: str, description: str) -> None:
@@ -72,41 +82,41 @@ def _render_getting_started(profile: MemberProfile | None) -> None:
     statuses = build_onboarding_status(st.session_state, profile)
     steps = (
         (
-            "profile", "1️⃣ โปรไฟล์สมาชิก",
-            "กรอกข้อมูลพื้นฐานและเป้าหมายรายได้",
-            "ไปกรอกโปรไฟล์", "โปรไฟล์สมาชิก",
+            "profile", _t("Onboarding Step Profile Title"),
+            _t("Onboarding Step Profile Description"),
+            _t("Onboarding CTA Profile"), "โปรไฟล์สมาชิก",
         ),
         (
-            "action_plan", "2️⃣ สร้างแผนปฏิบัติการ 30 วัน",
-            "ให้ AI สร้างแผนงานที่เหมาะกับเป้าหมายของคุณ แล้วทำเครื่องหมายเมื่อได้ทำภารกิจ",
-            "สร้างแผน 30 วัน", "แผนปฏิบัติการ 30 วัน",
+            "action_plan", _t("Onboarding Step Plan Title"),
+            _t("Onboarding Step Plan Description"),
+            _t("Onboarding CTA Plan"), "แผนปฏิบัติการ 30 วัน",
         ),
         (
-            "workplan", "3️⃣ บันทึกข้อมูลผู้มุ่งหวังและเป้าหมายใน Workplan",
-            "เพิ่มรายชื่อผู้มุ่งหวัง บันทึกสถานะการติดตาม และกำหนดเป้าหมายการทำงาน",
-            "ไปที่ Workplan", "Workplan ธุรกิจ",
+            "workplan", _t("Onboarding Step Workplan Title"),
+            _t("Onboarding Step Workplan Description"),
+            _t("Onboarding CTA Workplan"), "Workplan ธุรกิจ",
         ),
         (
-            "ai_coach", "4️⃣ ใช้โค้ช AI",
-            "ถามคำถามเกี่ยวกับการตลาด การสร้างทีม และการพัฒนาธุรกิจ",
-            "ถามโค้ช AI", "โค้ช AI",
+            "ai_coach", _t("Onboarding Step AI Title"),
+            _t("Onboarding Step AI Description"),
+            _t("Onboarding CTA AI"), "โค้ช AI",
         ),
         (
-            "dashboard", "5️⃣ ลงมือปฏิบัติและติดตามผล",
-            "อัปเดตความคืบหน้าใน Dashboard อย่างสม่ำเสมอ",
-            "ดู Dashboard", "Dashboard สมาชิก",
+            "dashboard", _t("Onboarding Step Dashboard Title"),
+            _t("Onboarding Step Dashboard Description"),
+            _t("Onboarding CTA Dashboard"), "Dashboard สมาชิก",
         ),
     )
     completed = sum(statuses.values())
     with st.container(key="onboarding_sticky_summary"):
         st.markdown(
             "<div class='onboarding-title'>"
-            f"<span class='onboarding-title-desktop'>🚀 เริ่มต้นใช้งาน {short_name}</span>"
-            "<span class='onboarding-title-mobile'>🚀 เริ่มต้นใช้งาน</span>"
+            f"<span class='onboarding-title-desktop'>{_t('Onboarding Title', short_name=short_name)}</span>"
+            f"<span class='onboarding-title-mobile'>{_t('Onboarding Title Mobile')}</span>"
             "</div>",
             unsafe_allow_html=True,
         )
-        st.progress(completed / len(steps), text=f"{completed}/5 ขั้นตอนสำเร็จ")
+        st.progress(completed / len(steps), text=_t("Onboarding Progress", completed=completed))
 
     with st.container(border=True, key="onboarding_steps_card"):
         columns = st.columns(5)
@@ -584,7 +594,7 @@ def _render_answer_source(metadata: dict[str, object]) -> None:
         return
     if source == "openai":
         model = str(metadata.get("model", "") or "")
-        label = "แหล่งคำตอบ: OpenAI"
+        label = _t("Answer Source OpenAI")
         if model:
             label += f" ({model})"
         st.caption(label)
@@ -602,7 +612,7 @@ def _render_answer_source(metadata: dict[str, object]) -> None:
         "response_validation": "รูปแบบคำตอบ",
         "unknown": "ไม่ทราบประเภท",
     }
-    label = "แหล่งคำตอบ: คำตอบสำรองภายในระบบ"
+    label = _t("Answer Source Fallback")
     if category:
-        label += f" | สาเหตุ: {category_labels.get(category, category)}"
+        label += f" | {_t('Answer Source Reason')}: {category_labels.get(category, category)}"
     st.caption(label)

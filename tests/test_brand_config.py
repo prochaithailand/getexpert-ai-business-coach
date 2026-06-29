@@ -37,6 +37,17 @@ class BrandConfigTests(unittest.TestCase):
         self.assertIn("အီးမေးလ်များ", translate("Email Consent", "my"))
         self.assertIn("AI ဖြင့်", translate("Marketing Opt In", "my"))
 
+    def test_myanmar_onboarding_and_ai_source_translations_are_available(self) -> None:
+        self.assertIn("စတင်အသုံးပြုရန်", translate("Onboarding Title", "my"))
+        self.assertIn("ပရိုဖိုင်ဖြည့်ရန်", translate("Onboarding CTA Profile", "my"))
+        self.assertIn("ရက် ၃၀", translate("Onboarding CTA Plan", "my"))
+        self.assertIn("AI Coach", translate("Onboarding CTA AI", "my"))
+        self.assertIn("Dashboard", translate("Onboarding CTA Dashboard", "my"))
+        self.assertEqual(translate("Answer Source OpenAI", "my"), "အဖြေရင်းမြစ်: OpenAI")
+        self.assertIn("အရန်အဖြေ", translate("Answer Source Fallback", "my"))
+        self.assertEqual(translate("Reference Heading", "my"), "ကိုးကားအချက်အလက်များ")
+        self.assertIn("မလုံလောက်သေးပါ", translate("Reference Missing", "my"))
+
 
 if __name__ == "__main__":
     unittest.main()

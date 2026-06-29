@@ -15,6 +15,7 @@ from services.openai_runtime_service import (
     OpenAIRuntimeService,
     build_answer_metadata,
 )
+from translations import translate
 
 
 class OpenAICoachService(LocalCoachService):
@@ -258,9 +259,10 @@ class OpenAICoachService(LocalCoachService):
             return CoachAnswer(NO_WORKPLAN_MESSAGE)
         if not matches and not (activity_context and activity_context.has_data):
             return CoachAnswer(
-                self._append_source_section(
+                self._append_source_section_for_question(
                     self._insufficient_knowledge_message(message),
                     (),
+                    message,
                 )
             )
         instructions = self._build_instructions(profile, bool(matches), activity_context)
@@ -284,7 +286,7 @@ class OpenAICoachService(LocalCoachService):
             if not self._is_valid_answer_language(answer):
                 raise self.openai_runtime.record_validation_failure()
             return CoachAnswer(
-                self._append_source_section(answer, sources),
+                self._append_source_section_for_question(answer, sources, message),
                 sources,
                 build_answer_metadata(
                     "openai",
@@ -304,7 +306,7 @@ class OpenAICoachService(LocalCoachService):
             else:
                 notice = "ขณะนี้ AI หลักยังไม่พร้อมใช้งาน ระบบจึงใช้คำตอบสำรองจากข้อมูลภายในก่อน"
             return CoachAnswer(
-                notice + "\n\n" + fallback.answer,
+                notice + "\n\n" + self._replace_source_section_for_question(fallback.answer, fallback.sources, message),
                 fallback.sources,
                 build_answer_metadata(
                     "fallback",
@@ -491,6 +493,11 @@ class OpenAICoachService(LocalCoachService):
             "กรุณาระบุหัวข้อหรือช่องทางที่ต้องการให้ชัดเจนขึ้น"
         )
 
+    def _answer_language(self, question: str) -> str:
+        if self.brand.get("key") == "tglife":
+            return self._detect_question_language(question)
+        return "th"
+
     def _is_valid_answer_language(self, text: str) -> bool:
         if self.brand.get("key") == "tglife":
             return bool(text.strip())
@@ -503,3 +510,30 @@ class OpenAICoachService(LocalCoachService):
             if marker in cleaned:
                 cleaned = cleaned.split(marker, 1)[0].rstrip()
         return super()._append_source_section(cleaned, sources)
+
+    def _append_source_section_for_question(
+        self,
+        answer: str,
+        sources: Sequence[str],
+        question: str,
+    ) -> str:
+        cleaned = answer.rstrip()
+        for marker in ("**แหล่งข้อมูลอ้างอิง**", "### แหล่งข้อมูลอ้างอิง", "## แหล่งข้อมูลอ้างอิง"):
+            if marker in cleaned:
+                cleaned = cleaned.split(marker, 1)[0].rstrip()
+        language = self._answer_language(question)
+        heading = translate("Reference Heading", language)
+        if sources:
+            source_lines = "\n".join(f"- {source}" for source in dict.fromkeys(sources))
+        else:
+            source_lines = f"- {translate('Reference Missing', language)}"
+        return f"{cleaned}\n\n---\n**{heading}**\n{source_lines}"
+
+    def _replace_source_section_for_question(
+        self,
+        answer: str,
+        sources: Sequence[str],
+        question: str,
+    ) -> str:
+        body = answer.split("\n\n---\n", 1)[0].rstrip()
+        return self._append_source_section_for_question(body, sources, question)
