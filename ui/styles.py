@@ -254,6 +254,7 @@ def apply_global_styles() -> None:
         .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] button {
           background: var(--white); color: var(--navy) !important; border: 2px solid var(--blue);
           border-radius: 10px; font-weight: 750; min-height: 2.65rem;
+          white-space: normal; overflow-wrap: anywhere; line-height: 1.25;
         }
         .stButton > button *, .stDownloadButton > button *,
         [data-testid="stFormSubmitButton"] button * { color: inherit !important; }

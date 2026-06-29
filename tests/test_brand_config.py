@@ -1,7 +1,7 @@
 import unittest
 
 from brand_config import get_brand, resolve_brand_key
-from translations import translate, translate_nav
+from translations import TRANSLATIONS, translate, translate_nav
 
 
 class BrandConfigTests(unittest.TestCase):
@@ -47,6 +47,30 @@ class BrandConfigTests(unittest.TestCase):
         self.assertIn("အရန်အဖြေ", translate("Answer Source Fallback", "my"))
         self.assertEqual(translate("Reference Heading", "my"), "ကိုးကားအချက်အလက်များ")
         self.assertIn("မလုံလောက်သေးပါ", translate("Reference Missing", "my"))
+
+    def test_core_page_translation_keys_are_available_for_launch_languages(self) -> None:
+        required_keys = (
+            "30-Day Plan Page Title",
+            "30-Day Plan Page Description",
+            "Action Plan Daily Time",
+            "Action Plan Monthly Goal",
+            "Action Plan Generate Button",
+            "Action Plan Empty Hint",
+            "Progress Summary",
+            "Workplan Page Description",
+            "Prospect Page Description",
+            "Dashboard Page Description",
+            "AI Coach Semantic Ready",
+        )
+        for language in ("th", "my", "en"):
+            with self.subTest(language=language):
+                for key in required_keys:
+                    self.assertIn(key, TRANSLATIONS[language])
+                    self.assertTrue(translate(key, language).strip())
+
+    def test_missing_translation_key_falls_back_safely(self) -> None:
+        self.assertEqual(translate("Unknown Launch Key", "my"), "Unknown Launch Key")
+        self.assertEqual(translate("30-Day Plan Page Title", "unknown"), "แผนปฏิบัติการ 30 วัน")
 
 
 if __name__ == "__main__":

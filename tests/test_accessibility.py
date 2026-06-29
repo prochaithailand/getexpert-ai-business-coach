@@ -100,8 +100,9 @@ class AccessibilityThemeTests(unittest.TestCase):
 
     def test_dashboard_charts_define_distinct_target_and_actual_colors(self) -> None:
         dashboard_source = Path("views/dashboard_page.py").read_text(encoding="utf-8")
-        self.assertIn("ผลลัพธ์จริง", dashboard_source)
-        self.assertIn('"domain": ["เป้าหมาย", "ผลลัพธ์จริง"]', dashboard_source)
+        self.assertIn('_t("Actual Result")', dashboard_source)
+        self.assertIn('_t("Target")', dashboard_source)
+        self.assertIn('"domain": [_t("Target"), _t("Actual Result")]', dashboard_source)
         self.assertIn('"range": ["#0B2E59", "#F59E0B"]', dashboard_source)
 
     def test_streamlit_cloud_branding_and_toolbar_are_hidden_globally(self) -> None:

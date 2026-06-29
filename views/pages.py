@@ -40,7 +40,7 @@ def _page_header(title: str, description: str) -> None:
 def _require_profile(profile: MemberProfile | None) -> bool:
     if profile and profile.is_complete:
         return True
-    st.warning("กรุณากรอกโปรไฟล์สมาชิกก่อน เพื่อให้ระบบจัดทำคำแนะนำที่เหมาะสมกับคุณ")
+    st.warning(_t("Profile Required Warning"))
     return False
 
 
@@ -176,7 +176,7 @@ def render_home(profile: MemberProfile | None) -> None:
 
 
 def render_member_profile(repository: ProfileRepository) -> None:
-    _page_header("โปรไฟล์สมาชิก", "ให้ข้อมูลพื้นฐานเพื่อช่วยให้ระบบวางแผนพัฒนาธุรกิจได้ตรงกับเป้าหมายของคุณ")
+    _page_header(_t("Profile Page Title"), _t("Profile Page Description"))
     authenticated = st.session_state.get("authenticated_user", {})
     raw_role = str(authenticated.get("role", "Member")).strip()
     authenticated_role = raw_role if raw_role in {"Member", "Leader", "Partner", "Admin"} else "Member"
@@ -187,17 +187,17 @@ def render_member_profile(repository: ProfileRepository) -> None:
     experience_index = EXPERIENCE_LEVELS.index(current.online_marketing_experience) if current.online_marketing_experience in EXPERIENCE_LEVELS else 0
     with st.form("member_profile_form"):
         left, right = st.columns(2)
-        name = left.text_input("ชื่อ-นามสกุล", value=current.name, placeholder="ตัวอย่าง: สมชาย ใจดี")
-        age = right.number_input("อายุ", min_value=18, max_value=100, value=current.age)
-        occupation = left.text_input("อาชีพ", value=current.occupation, placeholder="ตัวอย่าง: ผู้จัดการฝ่ายขาย")
-        daily_time = right.number_input("เวลาที่พร้อมทำงานต่อวัน (ชั่วโมง)", min_value=0.25, max_value=12.0, value=current.daily_available_time, step=0.25)
-        income_goal = left.number_input("เป้าหมายรายได้ต่อเดือน (บาท)", min_value=0.0, value=current.income_goal, step=1000.0)
-        experience = right.selectbox("ประสบการณ์ด้านการตลาดออนไลน์", EXPERIENCE_LEVELS, index=experience_index)
+        name = left.text_input(_t("Full Name"), value=current.name, placeholder=_t("Full Name Placeholder"))
+        age = right.number_input(_t("Age"), min_value=18, max_value=100, value=current.age)
+        occupation = left.text_input(_t("Occupation"), value=current.occupation, placeholder=_t("Occupation Placeholder"))
+        daily_time = right.number_input(_t("Daily Available Time"), min_value=0.25, max_value=12.0, value=current.daily_available_time, step=0.25)
+        income_goal = left.number_input(_t("Monthly Income Goal"), min_value=0.0, value=current.income_goal, step=1000.0)
+        experience = right.selectbox(_t("Online Marketing Experience"), EXPERIENCE_LEVELS, index=experience_index)
         sponsor = left.text_input(
-            "ผู้แนะนำ",
+            _t("Sponsor"),
             value=current.sponsor,
-            placeholder="ไม่บังคับ",
-            help="ระบุชื่อผู้แนะนำได้ตามต้องการ",
+            placeholder=_t("Optional"),
+            help=_t("Sponsor Help"),
         )
         if authenticated_role in {"Leader", "Partner"}:
             st.markdown("**ข้อมูลทีมที่ได้รับมอบหมาย**")
@@ -215,7 +215,7 @@ def render_member_profile(repository: ProfileRepository) -> None:
         elif authenticated_role == "Admin":
             st.markdown("**การจัดการทีม**")
             st.info("กำหนดหัวหน้าทีมและสมาชิกได้จากเมนูจัดการทีม")
-        submitted = st.form_submit_button("บันทึกโปรไฟล์สมาชิก", type="primary", width="stretch")
+        submitted = st.form_submit_button(_t("Save Member Profile"), type="primary", width="stretch")
     if submitted:
         profile = MemberProfile(
             name=name.strip(),
@@ -241,85 +241,85 @@ def render_member_profile(repository: ProfileRepository) -> None:
         )
         repository.save(profile)
         if profile.is_complete:
-            st.success("บันทึกโปรไฟล์เรียบร้อย ระบบพร้อมจัดทำคำแนะนำเฉพาะบุคคลให้คุณแล้ว")
-            st.markdown("### ขั้นตอนถัดไปที่แนะนำ")
-            st.info("เลือกดำเนินการต่อได้ทันที โดยเฉพาะบนมือถือให้แตะปุ่มด้านล่างเพื่อไปหน้าถัดไป")
+            st.success(_t("Profile Saved Success"))
+            st.markdown(f"### {_t('Recommended Next Steps')}")
+            st.info(_t("Next Step Mobile Hint"))
             first, second, third = st.columns(3)
             first.button(
-                "สร้างแผน 30 วัน",
+                _t("Onboarding CTA Plan"),
                 type="primary",
                 on_click=_navigate_to,
                 args=("แผนปฏิบัติการ 30 วัน",),
                 use_container_width=True,
             )
             second.button(
-                "บันทึกผู้มุ่งหวัง",
+                _t("Save Prospect CTA"),
                 on_click=_navigate_to,
                 args=("ผู้มุ่งหวัง",),
                 use_container_width=True,
             )
             third.button(
-                "ไปที่ Dashboard",
+                _t("Go To Dashboard CTA"),
                 on_click=_navigate_to,
                 args=("Dashboard สมาชิก",),
                 use_container_width=True,
             )
         else:
-            st.warning("บันทึกข้อมูลแล้ว กรุณาระบุชื่อและอาชีพเพื่อให้ระบบจัดทำคำแนะนำได้สมบูรณ์")
+            st.warning(_t("Profile Incomplete Warning"))
 
 
 def render_action_plan(profile: MemberProfile | None, coach: CoachService) -> None:
-    _page_header("แผนปฏิบัติการ 30 วัน", "แผนพัฒนาธุรกิจรายวัน ตั้งแต่การวางรากฐานจนถึงการติดตามผลและต่อยอด")
+    _page_header(_t("30-Day Plan Page Title"), _t("30-Day Plan Page Description"))
     if not _require_profile(profile):
         return
     assert profile is not None
     a, b, c = st.columns(3)
-    a.markdown(f"<div class='metric-card'><div class='metric-label'>เวลาลงมือทำต่อวัน</div><div class='metric-value'>{profile.daily_available_time:g} ชม.</div></div>", unsafe_allow_html=True)
-    b.markdown(f"<div class='metric-card'><div class='metric-label'>เป้าหมายรายได้ต่อเดือน</div><div class='metric-value'>{profile.income_goal:,.0f} บาท</div></div>", unsafe_allow_html=True)
-    c.markdown("<div class='metric-card'><div class='metric-label'>ระยะเวลาแผนงาน</div><div class='metric-value'>30 วัน</div></div>", unsafe_allow_html=True)
+    a.markdown(f"<div class='metric-card'><div class='metric-label'>{_t('Action Plan Daily Time')}</div><div class='metric-value'>{profile.daily_available_time:g} {_t('Hours Short')}</div></div>", unsafe_allow_html=True)
+    b.markdown(f"<div class='metric-card'><div class='metric-label'>{_t('Action Plan Monthly Goal')}</div><div class='metric-value'>{profile.income_goal:,.0f} {_t('Currency Baht')}</div></div>", unsafe_allow_html=True)
+    c.markdown(f"<div class='metric-card'><div class='metric-label'>{_t('Action Plan Duration')}</div><div class='metric-value'>30 {_t('Days Unit')}</div></div>", unsafe_allow_html=True)
     st.write("")
     if getattr(coach, "is_api_enabled", False):
-        st.success("ระบบจะใช้ OpenAI เพื่อสร้างแผนเฉพาะบุคคลจากข้อมูลโปรไฟล์ทั้ง 6 ด้าน")
+        st.success(_t("Action Plan OpenAI Notice"))
     else:
-        st.warning("ยังไม่ได้ตั้งค่า OPENAI_API_KEY ระบบจึงใช้แผนพื้นฐานที่ปรับตามโปรไฟล์สมาชิก")
+        st.warning(_t("Action Plan Fallback Notice"))
     signature = _profile_signature(profile)
     plan = st.session_state.get("action_plan")
     saved_signature = tuple(st.session_state.get("action_plan_signature", ()))
     if plan:
         _persist_existing_action_plan_once(plan, saved_signature)
-        st.info("ระบบโหลดแผนปฏิบัติการที่บันทึกไว้ล่าสุดแล้ว")
+        st.info(_t("Action Plan Loaded Notice"))
         profile_changed = saved_signature not in {signature, signature[:6]}
         confirmed = True
         if profile_changed:
-            st.warning("ข้อมูลโปรไฟล์มีการเปลี่ยนแปลง แผนเดิมยังคงแสดงอยู่และจะไม่ถูกแทนที่จนกว่าคุณจะยืนยันสร้างแผนใหม่")
-            confirmed = st.checkbox("ยืนยันสร้างแผนใหม่จากข้อมูลโปรไฟล์ล่าสุด")
+            st.warning(_t("Action Plan Profile Changed Warning"))
+            confirmed = st.checkbox(_t("Action Plan Confirm Regenerate"))
         if st.button(
-            "สร้างแผนใหม่",
+            _t("Action Plan Regenerate Button"),
             disabled=not confirmed,
             use_container_width=True,
         ):
             plan = _generate_and_save_action_plan(profile, coach, signature)
     elif st.button(
-        "สร้างแผนปฏิบัติการ 30 วันของฉัน",
+        _t("Action Plan Generate Button"),
         type="primary",
         use_container_width=True,
     ):
         plan = _generate_and_save_action_plan(profile, coach, signature)
     if not plan:
-        st.info("กดปุ่มสร้างแผน เพื่อดูภารกิจประจำวันและตัวชี้วัดความสำเร็จ")
+        st.info(_t("Action Plan Empty Hint"))
         return
     member_key = member_progress_key(profile)
     completion_store = st.session_state.get("plan_completion_by_member", {})
     member_statuses = dict(completion_store.get(member_key, {}))
     progress = calculate_plan_progress(member_statuses)
 
-    st.subheader("สรุปความก้าวหน้า")
+    st.subheader(_t("Progress Summary"))
     card_columns = st.columns(4)
     card_values = (
-        ("แผนทั้งหมด", f"{progress.total_days} วัน"),
-        ("ทำสำเร็จแล้ว", f"{progress.completed_days} วัน"),
-        ("คงเหลือ", f"{progress.remaining_days} วัน"),
-        ("คะแนน PP", f"{progress.pp_score} PP"),
+        (_t("Total Plan Days"), f"{progress.total_days} {_t('Days Unit')}"),
+        (_t("Completed Days"), f"{progress.completed_days} {_t('Days Unit')}"),
+        (_t("Remaining Days"), f"{progress.remaining_days} {_t('Days Unit')}"),
+        (_t("PP Score"), f"{progress.pp_score} PP"),
     )
     for column, (label, value) in zip(card_columns, card_values):
         column.markdown(
@@ -329,12 +329,12 @@ def render_action_plan(profile: MemberProfile | None, coach: CoachService) -> No
         )
     st.write("")
     st.markdown(
-        f"**ระดับสถานะ:** {progress.status_level} &nbsp;&nbsp; | &nbsp;&nbsp; "
-        f"**ความก้าวหน้า:** {progress.percentage:.0f}%"
+        f"**{_t('Status Level')}:** {progress.status_level} &nbsp;&nbsp; | &nbsp;&nbsp; "
+        f"**{_t('Progress')}:** {progress.percentage:.0f}%"
     )
     st.progress(
         progress.percentage / 100,
-        text=f"ทำสำเร็จ {progress.completed_days} วัน จากทั้งหมด {progress.total_days} วัน",
+        text=_t("Progress Bar Text", completed=progress.completed_days, total=progress.total_days),
     )
     st.write("")
 
@@ -345,19 +345,19 @@ def render_action_plan(profile: MemberProfile | None, coach: CoachService) -> No
             for item in (entry for entry in plan if entry.phase == phase):
                 tasks = " | ".join(item.tasks)
                 st.markdown(
-                    f"<div class='plan-day'><strong>วันที่ {item.day}: {item.focus}</strong><br>"
-                    f"<small>{tasks}<br><b>ตัวชี้วัดความสำเร็จ:</b> {item.success_metric}</small></div>",
+                    f"<div class='plan-day'><strong>{_t('Day Label')} {item.day}: {item.focus}</strong><br>"
+                    f"<small>{tasks}<br><b>{_t('Success Metric')}:</b> {item.success_metric}</small></div>",
                     unsafe_allow_html=True,
                 )
                 widget_key = f"plan_day_complete_{member_key}_{item.day}"
                 completed = st.checkbox(
-                    "ทำกิจกรรมวันนี้สำเร็จแล้ว",
+                    _t("Mark Day Complete"),
                     value=bool(member_statuses.get(str(item.day), False)),
                     key=widget_key,
                     on_change=_update_day_completion,
                     args=(member_key, item.day, widget_key),
                 )
-                st.caption("สถานะ: ทำสำเร็จแล้ว" if completed else "สถานะ: ยังไม่สำเร็จ")
+                st.caption(_t("Day Completed Status") if completed else _t("Day Pending Status"))
 
 
 def _generate_and_save_action_plan(
@@ -365,7 +365,7 @@ def _generate_and_save_action_plan(
     coach: CoachService,
     signature: tuple[Any, ...],
 ) -> list[ActionItem]:
-    with st.spinner("กำลังสร้างแผนเฉพาะบุคคล..."):
+    with st.spinner(_t("Generating Action Plan")):
         plan = coach.generate_action_plan(profile)
         st.session_state.action_plan = plan
         st.session_state.action_plan_signature = signature
@@ -403,28 +403,28 @@ def _persist_existing_action_plan_once(
 
 
 def render_content_creator(profile: MemberProfile | None, coach: CoachService) -> None:
-    _page_header("เครื่องมือสร้างคอนเทนต์", "สร้างข้อความสื่อสารที่มีคุณค่า เหมาะสำหรับช่องทางที่สมาชิกและลูกค้าใช้งานทุกวัน")
+    _page_header(_t("Content Creator"), _t("Content Creator Description"))
     if not _require_profile(profile):
         return
     assert profile is not None
     platforms = ("โพสต์ Facebook", "สคริปต์ TikTok", "ข้อความบรอดแคสต์ LINE OA")
     goals = ("สร้างการรับรู้", "เพิ่มผู้สนใจใหม่", "เชิญเข้าร่วมกิจกรรม", "ติดตามลูกค้า", "พัฒนาทีม")
     first, second = st.columns(2)
-    platform = first.selectbox("แพลตฟอร์ม", platforms, key="content_platform")
-    goal = second.selectbox("เป้าหมายของคอนเทนต์", goals, key="content_goal")
+    platform = first.selectbox(_t("Platform"), platforms, key="content_platform")
+    goal = second.selectbox(_t("Content Goal"), goals, key="content_goal")
     topic = st.text_input(
-        "หัวข้อที่ต้องการสื่อสาร",
+        _t("Content Topic"),
         value="การเริ่มต้นธุรกิจเครือข่าย",
-        placeholder="ตัวอย่าง: วิธีสร้างรายชื่อผู้มุ่งหวัง",
+        placeholder=_t("Content Topic Placeholder"),
         key="content_topic",
     ).strip()
     if getattr(coach, "is_api_enabled", False):
-        st.success("ระบบจะใช้ OpenAI โปรไฟล์สมาชิก และบริบทจากคลังความรู้เพื่อสร้างคอนเทนต์")
+        st.success(_t("Content OpenAI Notice"))
     else:
-        st.warning("ยังไม่ได้ตั้งค่า OPENAI_API_KEY ระบบจึงใช้เทมเพลตพื้นฐานที่ปรับตามโปรไฟล์")
+        st.warning(_t("Content Fallback Notice"))
     input_signature = (*_profile_signature(profile), platform, goal, topic)
-    if st.button("สร้างคอนเทนต์เฉพาะบุคคล", type="primary", use_container_width=True, disabled=not topic):
-        with st.spinner("กำลังสร้างคอนเทนต์จากโปรไฟล์และคลังความรู้..."):
+    if st.button(_t("Generate Content Button"), type="primary", use_container_width=True, disabled=not topic):
+        with st.spinner(_t("Generating Content")):
             st.session_state.generated_channel = platform
             st.session_state.generated_content = coach.generate_content(platform, profile, goal, topic)
             st.session_state.generated_content_signature = input_signature
@@ -444,49 +444,49 @@ def render_content_creator(profile: MemberProfile | None, coach: CoachService) -
     if content:
         st.subheader(platform)
         content_key = f"content_{abs(hash(input_signature))}"
-        st.text_area("ร่างคอนเทนต์ที่สร้างแล้ว", value=content, height=330, key=content_key)
-        st.caption("กรุณาตรวจสอบข้อความกล่าวอ้าง รายละเอียดผลิตภัณฑ์ และข้อกำหนดของบริษัทก่อนเผยแพร่ทุกครั้ง")
+        st.text_area(_t("Generated Content Draft"), value=content, height=330, key=content_key)
+        st.caption(_t("Content Review Warning"))
     else:
-        st.info("เลือกช่องทางที่ต้องการ เพื่อให้ระบบสร้างร่างคอนเทนต์ฉบับแรก")
+        st.info(_t("Content Empty Hint"))
 
 
 def render_knowledge_base() -> None:
-    _page_header("คลังความรู้", "ค้นหาและเปิดคู่มือฝึกอบรม เอกสารพัฒนาทักษะ และแหล่งความรู้ทางธุรกิจ")
+    _page_header(_t("Knowledge Hub"), _t("Knowledge Hub Description"))
     knowledge_dir = Path(__file__).resolve().parents[1] / "knowledge"
     service = KnowledgeService(knowledge_dir)
     documents = service.list_documents()
 
     if not documents:
-        st.info(f"ไม่พบเอกสาร PDF ในโฟลเดอร์ {knowledge_dir.name}/ กรุณาเพิ่มไฟล์ PDF เพื่อแสดงในคลังความรู้")
+        st.info(_t("Knowledge No PDFs", folder=knowledge_dir.name))
         return
 
     search_col, category_col = st.columns([2, 1])
     query = search_col.text_input(
-        "ค้นหาเอกสาร",
-        placeholder="ค้นหาจากชื่อเอกสารหรือหมวดหมู่...",
+        _t("Search Documents"),
+        placeholder=_t("Search Documents Placeholder"),
         key="knowledge_search",
     )
-    categories = ["ทุกหมวดหมู่", *sorted({document.category for document in documents})]
-    category = category_col.selectbox("หมวดหมู่", categories, key="knowledge_category")
+    categories = [_t("All Categories"), *sorted({document.category for document in documents})]
+    category = category_col.selectbox(_t("Category"), categories, key="knowledge_category")
     matches = service.search(documents, query, category)
 
-    st.caption(f"แสดงเอกสาร {len(matches)} จากทั้งหมด {len(documents)} รายการ")
+    st.caption(_t("Knowledge Result Count", shown=len(matches), total=len(documents)))
     if not matches:
-        st.warning("ไม่พบเอกสารที่ตรงกับการค้นหา กรุณาลองใช้คำค้นหรือเลือกหมวดหมู่อื่น")
+        st.warning(_t("Knowledge No Match"))
         return
 
     header = st.columns([5, 2, 1.4, 1])
-    header[0].markdown("**ชื่อเอกสาร**")
-    header[1].markdown("**หมวดหมู่**")
-    header[2].markdown("**ขนาดไฟล์**")
-    header[3].markdown("**ดำเนินการ**")
+    header[0].markdown(f"**{_t('Document Name')}**")
+    header[1].markdown(f"**{_t('Category')}**")
+    header[2].markdown(f"**{_t('File Size')}**")
+    header[3].markdown(f"**{_t('Action')}**")
 
     for index, document in enumerate(matches):
         row = st.columns([5, 2, 1.4, 1])
         row[0].markdown(f"**{document.name}**")
         row[1].write(document.category)
         row[2].write(document.display_size)
-        if row[3].button("เปิดอ่าน", key=f"open_pdf_{document.path}", use_container_width=True):
+        if row[3].button(_t("Open Document"), key=f"open_pdf_{document.path}", use_container_width=True):
             st.session_state.selected_knowledge_document = str(document.path)
         if index < len(matches) - 1:
             st.divider()
@@ -497,7 +497,7 @@ def render_knowledge_base() -> None:
         st.divider()
         title_col, close_col = st.columns([5, 1])
         title_col.subheader(selected.name)
-        if close_col.button("ปิดเอกสาร", use_container_width=True):
+        if close_col.button(_t("Close Document"), use_container_width=True):
             del st.session_state.selected_knowledge_document
             st.rerun()
         st.caption(f"{selected.category} | {selected.display_size}")
@@ -512,16 +512,16 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
         else "โค้ช AI จากคลังความรู้"
     )
     coach_description = (
-        "ถามคำถามได้ทั้งภาษาไทย เมียนมาร์ หรืออังกฤษ เพื่อรับคำแนะนำสำหรับสมาชิก TG Life"
+        _t("AI Coach TG Life Description")
         if brand.get("key") == "tglife"
-        else "ถามคำถามจากคู่มือในคลังความรู้ และรับคำแนะนำภาษาไทยพร้อมชื่อเอกสารอ้างอิง"
+        else _t("AI Coach Description")
     )
     _page_header(coach_title, coach_description)
     if "coach_messages" not in st.session_state:
         greeting = (
-            "မင်္ဂလာပါ။ TG Life AI Business Coach powered by GetExpert พร้อมช่วยคุณเรียนรู้ พัฒนาทีม และติดตามผู้มุ่งหวัง วันนี้อยากให้ช่วยเรื่องไหนครับ"
+            _t("AI Coach TG Life Greeting")
             if brand.get("key") == "tglife"
-            else "สวัสดีครับ โค้ชพร้อมช่วยค้นคำตอบจากฐานความรู้ของคุณ วันนี้อยากพัฒนาเรื่องไหนเป็นพิเศษครับ"
+            else _t("AI Coach Greeting")
         )
         st.session_state.coach_messages = [
             {
@@ -533,14 +533,14 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
     if getattr(coach, "is_api_enabled", False):
         semantic_status = getattr(getattr(coach, "knowledge_service", None), "semantic_enabled", False)
         if semantic_status:
-            st.success("เชื่อมต่อ OpenAI API และระบบค้นหาความหมายแล้ว โค้ชพร้อมให้คำแนะนำเฉพาะบุคคล")
+            st.success(_t("AI Coach Semantic Ready"))
         else:
-            st.success("เชื่อมต่อ OpenAI API แล้ว โค้ชพร้อมให้คำแนะนำเฉพาะบุคคล")
+            st.success(_t("AI Coach Ready"))
     else:
-        st.warning("ยังไม่ได้ตั้งค่า OPENAI_API_KEY ระบบจึงใช้โหมดค้นหาพื้นฐาน")
+        st.warning(_t("AI Coach Basic Mode"))
     top_left, top_right = st.columns([4, 1])
-    top_left.caption("ประวัติการสนทนาจะถูกเก็บไว้ตลอดการใช้งานในครั้งนี้")
-    if top_right.button("ล้างประวัติ", use_container_width=True):
+    top_left.caption(_t("Chat History Notice"))
+    if top_right.button(_t("Clear History"), use_container_width=True):
         st.session_state.coach_messages = []
         st.rerun()
     for message in st.session_state.coach_messages:
@@ -549,9 +549,9 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
             if message["role"] == "assistant":
                 _render_answer_source(message.get("metadata", {}))
     placeholder = (
-        "Ask in Thai, Myanmar, or English about TG Life business, team building, prospects, or Workplan..."
+        _t("AI Coach TG Life Placeholder")
         if brand.get("key") == "tglife"
-        else "ถามเกี่ยวกับ 5 โมดูล แผนงาน MLM, LINE OA, TikTok, Canva หรือคู่มืออื่น ๆ..."
+        else _t("AI Coach Placeholder")
     )
     if prompt := st.chat_input(placeholder):
         st.session_state.coach_messages.append({"role": "user", "content": prompt})
