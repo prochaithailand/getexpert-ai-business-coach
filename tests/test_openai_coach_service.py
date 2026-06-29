@@ -138,6 +138,45 @@ class OpenAICoachServiceTests(unittest.TestCase):
         self.assertIn("ฐานความรู้ของระบบยังไม่มีข้อมูลเพียงพอ", result.answer)
         self.assertIn("**แหล่งข้อมูลอ้างอิง**", result.answer)
 
+    def test_tglife_burmese_no_evidence_returns_burmese_fallback(self) -> None:
+        responses = FakeResponses("မခေါ်သင့်ပါ")
+        service = OpenAICoachService(
+            StubKnowledgeService([]),
+            client=FakeClient(responses),
+            brand=get_brand({}, {"APP_BRAND": "tglife"}),
+        )
+
+        result = service.answer_question("TG Life အသင်းကို ဘယ်လိုတည်ဆောက်ရမလဲ", self.profile)
+
+        self.assertEqual(responses.calls, [])
+        self.assertIn("ဤမေးခွန်းကို ယုံကြည်စိတ်ချရစွာ ဖြေဆိုရန်", result.answer)
+        self.assertIn("အသိပညာအချက်အလက် မလုံလောက်သေးပါ", result.answer)
+        self.assertNotIn("ฐานความรู้ของระบบยังไม่มีข้อมูลเพียงพอ", result.answer)
+
+    def test_tglife_english_no_evidence_returns_english_fallback(self) -> None:
+        responses = FakeResponses("Should not be called")
+        service = OpenAICoachService(
+            StubKnowledgeService([]),
+            client=FakeClient(responses),
+            brand=get_brand({}, {"APP_BRAND": "tglife"}),
+        )
+
+        result = service.answer_question("How do I build my TG Life team?", self.profile)
+
+        self.assertEqual(responses.calls, [])
+        self.assertIn("does not yet have enough reliable knowledge", result.answer)
+        self.assertIn("Please rephrase your question", result.answer)
+        self.assertNotIn("ฐานความรู้ของระบบยังไม่มีข้อมูลเพียงพอ", result.answer)
+
+    def test_getexpert_thai_no_evidence_stays_thai_fallback(self) -> None:
+        responses = FakeResponses("ไม่ควรถูกเรียกใช้งาน")
+        service = OpenAICoachService(StubKnowledgeService([]), client=FakeClient(responses))
+
+        result = service.answer_question("ควรเริ่มสร้างทีมอย่างไร", self.profile)
+
+        self.assertEqual(responses.calls, [])
+        self.assertIn("ฐานความรู้ของระบบยังไม่มีข้อมูลเพียงพอ", result.answer)
+
     def test_workplan_question_sends_member_activity_without_pdf_matches(self) -> None:
         responses = FakeResponses(
             "🎯 Executive Summary\nมีข้อมูล Workplan แล้ว\n\n"

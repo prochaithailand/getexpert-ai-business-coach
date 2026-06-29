@@ -259,8 +259,7 @@ class OpenAICoachService(LocalCoachService):
         if not matches and not (activity_context and activity_context.has_data):
             return CoachAnswer(
                 self._append_source_section(
-                    "ฐานความรู้ของระบบยังไม่มีข้อมูลเพียงพอสำหรับตอบคำถามนี้อย่างน่าเชื่อถือ "
-                    "กรุณาระบุหัวข้อหรือช่องทางที่ต้องการให้ชัดเจนขึ้น",
+                    self._insufficient_knowledge_message(message),
                     (),
                 )
             )
@@ -456,6 +455,41 @@ class OpenAICoachService(LocalCoachService):
     @staticmethod
     def _contains_thai(text: str) -> bool:
         return bool(re.search(r"[\u0E00-\u0E7F]", text))
+
+    @staticmethod
+    def _contains_myanmar(text: str) -> bool:
+        return bool(re.search(r"[\u1000-\u109F]", text))
+
+    @classmethod
+    def _detect_question_language(cls, text: str) -> str:
+        if cls._contains_myanmar(text):
+            return "my"
+        if cls._contains_thai(text):
+            return "th"
+        if re.search(r"[A-Za-z]", text):
+            return "en"
+        return "th"
+
+    @classmethod
+    def _insufficient_knowledge_message(cls, question: str) -> str:
+        language = cls._detect_question_language(question)
+        if language == "my":
+            return (
+                "ဤမေးခွန်းကို ယုံကြည်စိတ်ချရစွာ ဖြေဆိုရန် စနစ်၏ "
+                "အသိပညာအချက်အလက် မလုံလောက်သေးပါ။ ကျေးဇူးပြု၍ "
+                "မေးခွန်းကို ပိုမိုအသေးစိတ် ပြန်လည်ရေးသားပါ သို့မဟုတ် "
+                "သင်သိလိုသောအကြောင်းအရာကို ပိုမိုရှင်းလင်းစွာ ဖော်ပြပါ။"
+            )
+        if language == "en":
+            return (
+                "The system does not yet have enough reliable knowledge to answer this "
+                "question confidently. Please rephrase your question or provide more "
+                "specific details."
+            )
+        return (
+            "ฐานความรู้ของระบบยังไม่มีข้อมูลเพียงพอสำหรับตอบคำถามนี้อย่างน่าเชื่อถือ "
+            "กรุณาระบุหัวข้อหรือช่องทางที่ต้องการให้ชัดเจนขึ้น"
+        )
 
     def _is_valid_answer_language(self, text: str) -> bool:
         if self.brand.get("key") == "tglife":
