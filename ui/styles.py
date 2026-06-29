@@ -120,11 +120,25 @@ def apply_global_styles() -> None:
           border: 1px solid transparent;
           border-radius: 10px;
           padding: 0.55rem 0.7rem;
+          white-space: normal;
+          min-height: 2.8rem;
         }
         [data-testid="stSidebar"] [role="radiogroup"] label p,
         [data-testid="stSidebar"] [role="radiogroup"] label span {
           color: var(--white) !important;
           font-weight: 650;
+          white-space: normal !important;
+          overflow-wrap: anywhere;
+          line-height: 1.25;
+        }
+        [data-testid="stSidebar"] [data-baseweb="select"] * {
+          white-space: normal !important;
+          overflow-wrap: anywhere;
+        }
+        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] * {
+          color: var(--white) !important;
+          font-weight: 750;
+          white-space: normal !important;
         }
         [data-testid="stSidebar"] [role="radiogroup"] label:hover {
           background: #163F70;

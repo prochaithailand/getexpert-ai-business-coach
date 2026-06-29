@@ -27,7 +27,16 @@ class BrandConfigTests(unittest.TestCase):
         self.assertEqual(translate_nav("ผู้มุ่งหวัง", "my"), "အလားအလာရှိသူများ")
         self.assertEqual(translate("30-Day Plan", "my"), "ရက် ၃၀ အစီအစဉ်")
 
+    def test_myanmar_auth_translations_are_available(self) -> None:
+        self.assertEqual(translate("language_selector", "my"), "ဘာသာစကား / Language")
+        self.assertEqual(translate("Sign Up", "my"), "စာရင်းသွင်းရန်")
+        self.assertEqual(translate("Full Name", "my"), "အမည် အပြည့်အစုံ")
+        self.assertEqual(translate("Email", "my"), "အီးမေးလ်")
+        self.assertEqual(translate("Password", "my"), "စကားဝှက်")
+        self.assertEqual(translate("Role", "my"), "အခန်းကဏ္ဍ")
+        self.assertIn("အီးမေးလ်များ", translate("Email Consent", "my"))
+        self.assertIn("AI ဖြင့်", translate("Marketing Opt In", "my"))
+
 
 if __name__ == "__main__":
     unittest.main()
-

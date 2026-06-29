@@ -18,28 +18,38 @@ from services.subscription_service import (
     normalize_subscription_user,
     trial_days_remaining,
 )
+from translations import translate
 
 
 def _active_brand() -> dict[str, str]:
     return st.session_state.get("_active_brand", {})
 
 
+def _language() -> str:
+    return str(st.session_state.get("language", "th"))
+
+
+def _t(key: str, **values: object) -> str:
+    text = translate(key, _language())
+    return text.format(**values) if values else text
+
+
 def render_login(store: SessionUserStore) -> None:
     brand = _active_brand()
     app_name = brand.get("app_name", "GetExpert AI Business Coach")
-    st.title("เข้าสู่ระบบ")
-    st.markdown(f"<p class='section-lead'>เข้าสู่ระบบเพื่อใช้งาน {app_name}</p>", unsafe_allow_html=True)
+    st.title(_t("Login"))
+    st.markdown(f"<p class='section-lead'>{_t('Login Lead', app_name=app_name)}</p>", unsafe_allow_html=True)
     login_in_progress = bool(st.session_state.get("login_in_progress", False))
     login_error = st.session_state.pop("login_error_message", "")
     if login_in_progress:
-        st.info("กำลังเข้าสู่ระบบ กรุณารอสักครู่...")
+        st.info(_t("Logging In Notice"))
     elif login_error:
         st.error(login_error)
     with st.form("login_form"):
-        email = st.text_input("อีเมล", placeholder="name@example.com")
-        password = st.text_input("รหัสผ่าน", type="password")
+        email = st.text_input(_t("Email"), placeholder="name@example.com")
+        password = st.text_input(_t("Password"), type="password")
         submitted = st.form_submit_button(
-            "กำลังเข้าสู่ระบบ..." if login_in_progress else "เข้าสู่ระบบ",
+            _t("Logging In") if login_in_progress else _t("Login"),
             type="primary",
             width="stretch",
             disabled=login_in_progress,
@@ -57,11 +67,11 @@ def render_login(store: SessionUserStore) -> None:
             st.session_state["login_in_progress"] = False
             return
         try:
-            with st.spinner("กำลังเข้าสู่ระบบ กรุณารอสักครู่..."):
+            with st.spinner(_t("Logging In Notice")):
                 user = store.authenticate(pending_email, pending_password)
         except SupabaseError as error:
             st.session_state["login_in_progress"] = False
-            st.session_state["login_error_message"] = f"ไม่สามารถเข้าสู่ระบบผ่าน Supabase ได้: {error}"
+            st.session_state["login_error_message"] = _t("Supabase Login Error", error=error)
             st.session_state.pop("pending_login_email", None)
             st.session_state.pop("pending_login_password", None)
             st.rerun()
@@ -74,33 +84,29 @@ def render_login(store: SessionUserStore) -> None:
         st.session_state.pop("pending_login_password", None)
         if user:
             st.session_state["login_in_progress"] = False
-            st.success(f"เข้าสู่ระบบสำเร็จ ยินดีต้อนรับคุณ{user.full_name}")
+            st.success(_t("Login Success", full_name=user.full_name))
             st.rerun()
         st.session_state["login_in_progress"] = False
-        st.session_state["login_error_message"] = "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
+        st.session_state["login_error_message"] = _t("Login Error")
         st.rerun()
 
 
 def render_register(store: SessionUserStore, referral_code: str = "") -> None:
     brand = _active_brand()
     short_name = brand.get("short_name", "GetExpert")
-    st.title("สมัครสมาชิก")
-    st.markdown(f"<p class='section-lead'>สร้างบัญชีใหม่เพื่อเริ่มต้นใช้งาน {short_name} บัญชีใหม่จะเป็นสมาชิกโดยอัตโนมัติ</p>", unsafe_allow_html=True)
+    st.title(_t("Sign Up"))
+    st.markdown(f"<p class='section-lead'>{_t('Register Lead', short_name=short_name)}</p>", unsafe_allow_html=True)
     if referral_code:
-        st.info("ลิงก์แนะนำนี้ใช้สำหรับบันทึกสิทธิ์ referral เท่านั้น ไม่ได้เพิ่มคุณเข้าทีมโดยอัตโนมัติ")
+        st.info(_t("Referral Notice"))
     with st.form("register_form"):
-        full_name = st.text_input("ชื่อ-นามสกุล", placeholder="ชื่อและนามสกุลของคุณ")
-        email = st.text_input("อีเมล", placeholder="name@example.com")
-        password = st.text_input("รหัสผ่าน", type="password", help="อย่างน้อย 8 ตัวอักษร")
-        st.text_input("บทบาท", value="สมาชิก", disabled=True)
-        submitted = st.form_submit_button("สมัครสมาชิก", type="primary", width="stretch")
-        st.caption(
-            f"เมื่อสมัครใช้งาน {short_name} คุณยินยอมให้ระบบส่งอีเมลที่เกี่ยวข้องกับบัญชีของคุณ "
-            "เช่น การยืนยันการสมัคร การแจ้งสถานะทดลองใช้ฟรี การชำระเงิน และการเปิดใช้งานบริการ"
-        )
+        full_name = st.text_input(_t("Full Name"), placeholder=_t("Full Name Placeholder"))
+        email = st.text_input(_t("Email"), placeholder="name@example.com")
+        password = st.text_input(_t("Password"), type="password", help=_t("Password Help"))
+        st.text_input(_t("Role"), value=_t("Member Role Label"), disabled=True)
+        submitted = st.form_submit_button(_t("Sign Up"), type="primary", width="stretch")
+        st.caption(_t("Email Consent", short_name=short_name))
         marketing_email_opt_in = st.checkbox(
-            "ฉันต้องการรับบทความ เทคนิคการใช้ AI เพื่อพัฒนาธุรกิจ ข่าวสาร "
-            f"และข้อเสนอจาก {short_name} ทางอีเมล",
+            _t("Marketing Opt In", short_name=short_name),
             value=False,
         )
     if submitted:
@@ -114,22 +120,22 @@ def render_register(store: SessionUserStore, referral_code: str = "") -> None:
         except (ValueError, SupabaseError) as error:
             st.warning(str(error))
             return
-        st.success("สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ")
+        st.success(_t("Register Success"))
 
 
 def render_forgot_password(
     store: SessionUserStore,
     redirect_url: str,
 ) -> None:
-    st.title("ลืมรหัสผ่าน")
+    st.title(_t("Forgot Password"))
     st.markdown(
-        "<p class='section-lead'>กรอกอีเมลที่ใช้สมัคร ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่</p>",
+        f"<p class='section-lead'>{_t('Forgot Lead')}</p>",
         unsafe_allow_html=True,
     )
     with st.form("forgot_password_form"):
-        email = st.text_input("อีเมล", placeholder="name@example.com")
+        email = st.text_input(_t("Email"), placeholder="name@example.com")
         submitted = st.form_submit_button(
-            "ส่งลิงก์รีเซ็ตรหัสผ่าน",
+            _t("Send Reset Link"),
             type="primary",
             width="stretch",
         )
@@ -141,8 +147,7 @@ def render_forgot_password(
         st.error(str(error))
         return
     st.success(
-        "หากอีเมลนี้มีบัญชีอยู่ในระบบ ระบบได้ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว "
-        "กรุณาตรวจสอบกล่องจดหมายและอีเมลขยะ"
+        _t("Reset Link Sent")
     )
 
 
@@ -152,23 +157,23 @@ def render_reset_password(
 ) -> None:
     brand = _active_brand()
     short_name = brand.get("short_name", "GetExpert")
-    st.title("ตั้งรหัสผ่านใหม่")
+    st.title(_t("Reset Password"))
     st.markdown(
-        f"<p class='section-lead'>กำหนดรหัสผ่านใหม่สำหรับบัญชี {short_name} ของคุณ</p>",
+        f"<p class='section-lead'>{_t('Reset Lead', short_name=short_name)}</p>",
         unsafe_allow_html=True,
     )
     with st.form("reset_password_form", clear_on_submit=True):
         new_password = st.text_input(
-            "รหัสผ่านใหม่",
+            _t("New Password"),
             type="password",
-            help="รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
+            help=_t("New Password Help"),
         )
         confirm_password = st.text_input(
-            "ยืนยันรหัสผ่านใหม่",
+            _t("Confirm New Password"),
             type="password",
         )
         submitted = st.form_submit_button(
-            "บันทึกรหัสผ่านใหม่",
+            _t("Save New Password"),
             type="primary",
             width="stretch",
         )
