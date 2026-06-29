@@ -32,16 +32,19 @@ class FakeEmbeddingClient:
 
 
 class KnowledgeServiceTests(unittest.TestCase):
-    def test_discovers_pdf_files_and_ignores_other_extensions(self) -> None:
+    def test_discovers_supported_knowledge_files_and_ignores_other_extensions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "Facebook Guide.pdf").write_bytes(b"pdf-data")
+            (root / "TG Life Guide.md").write_text("# TG Life\n\nMyanmar member training", encoding="utf-8")
             (root / "notes.txt").write_text("ignore me", encoding="utf-8")
 
             documents = KnowledgeService(root).list_documents()
 
-            self.assertEqual(len(documents), 1)
+            self.assertEqual(len(documents), 2)
+            documents = sorted(documents, key=lambda document: document.name)
             self.assertEqual(documents[0].name, "Facebook Guide")
+            self.assertEqual(documents[1].name, "TG Life Guide")
             self.assertEqual(documents[0].category, "สื่อสังคมออนไลน์")
             self.assertEqual(documents[0].display_size, "8 B")
 
@@ -66,6 +69,39 @@ class KnowledgeServiceTests(unittest.TestCase):
 
             self.assertEqual(len(service.search(documents, "FACEBOOK")), 1)
             self.assertEqual(len(service.search(documents, "", "การพัฒนาธุรกิจ")), 1)
+
+    def test_markdown_files_are_indexed_for_ai_coach_retrieval(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            filename = "TG_Life_Myanmar_Member_Training_Guide_V1.md"
+            (root / filename).write_text(
+                "# TG Life Myanmar Member Training\n\n"
+                "TG Life members should build a prospect list, follow up daily, and practice team coaching.",
+                encoding="utf-8",
+            )
+
+            results = KnowledgeService(root).search_text("TG Life prospect list follow up team coaching")
+
+            self.assertTrue(results)
+            self.assertEqual(results[0].document_name, filename)
+            self.assertIn("prospect list", results[0].text)
+
+    def test_markdown_lexical_retrieval_supports_myanmar_text(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            filename = "TG_Life_Myanmar_Workplan_Guide_V1.md"
+            (root / filename).write_text(
+                "# TG Life Workplan\n\n"
+                "အဖွဲ့ဝင်များသည် နေ့စဉ် လုပ်ငန်းအစီအစဉ်ကို မှတ်တမ်းတင်ပြီး "
+                "လူသစ်စာရင်းကို စနစ်တကျ ဆက်သွယ်ရမည်။",
+                encoding="utf-8",
+            )
+
+            results = KnowledgeService(root).search_text("လုပ်ငန်းအစီအစဉ် လူသစ်စာရင်း")
+
+            self.assertTrue(results)
+            self.assertEqual(results[0].document_name, filename)
+            self.assertIn("လုပ်ငန်းအစီအစဉ်", results[0].text)
 
     def test_explicit_platform_query_limits_results_to_that_source(self) -> None:
         service = KnowledgeService(Path("knowledge"))

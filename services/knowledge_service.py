@@ -18,9 +18,11 @@ except ImportError:  # pragma: no cover - surfaced as a clear runtime message
 
 
 class KnowledgeService:
-    """Indexes local PDFs and provides semantic-first retrieval with lexical fallback."""
+    """Indexes local knowledge documents and provides semantic-first retrieval with lexical fallback."""
 
-    CLEANING_VERSION = "2"
+    CLEANING_VERSION = "3"
+    SUPPORTED_EXTENSIONS = {".pdf", ".md", ".markdown"}
+    TEXT_DOCUMENT_EXTENSIONS = {".md", ".markdown"}
     CATEGORY_KEYWORDS = {
         "สื่อสังคมออนไลน์": ("facebook", "tiktok"),
         "เครื่องมือดิจิทัล": ("line", "linktree", "blogger", "google form", "canva"),
@@ -80,7 +82,7 @@ class KnowledgeService:
     def list_documents(self) -> list[KnowledgeDocument]:
         if not self.knowledge_dir.exists():
             return []
-        documents = [self._to_document(path) for path in self.knowledge_dir.rglob("*.pdf") if path.is_file()]
+        documents = [self._to_document(path) for path in self._document_paths()]
         return sorted(documents, key=lambda item: (item.category.casefold(), item.name.casefold()))
 
     def search(
@@ -199,15 +201,10 @@ class KnowledgeService:
         if self.embedding_client is not None and self._load_cache():
             self._indexed = True
             return
-        if PdfReader is None:
-            raise RuntimeError("ระบบค้นหาข้อความ PDF ต้องใช้ pypdf กรุณาติดตั้งแพ็กเกจตาม requirements.txt")
-
         seen_passages: set[str] = set()
         for document in self.list_documents():
             try:
-                reader = PdfReader(document.path)
-                for page_number, page in enumerate(reader.pages, start=1):
-                    text = self.clean_pdf_text(page.extract_text() or "", document.path.name)
+                for page_number, text in self._extract_document_text(document):
                     if len(text) < 40:
                         continue
                     for passage in self._split_passages(text):
@@ -227,6 +224,18 @@ class KnowledgeService:
             except Exception:
                 continue
         self._indexed = True
+
+    def _extract_document_text(self, document: KnowledgeDocument) -> list[tuple[int, str]]:
+        if document.path.suffix.casefold() in self.TEXT_DOCUMENT_EXTENSIONS:
+            text = self.clean_markdown_text(document.path.read_text(encoding="utf-8", errors="ignore"))
+            return [(1, text)] if text else []
+        if PdfReader is None:
+            raise RuntimeError("ระบบค้นหาข้อความ PDF ต้องใช้ pypdf กรุณาติดตั้งแพ็กเกจตาม requirements.txt")
+        reader = PdfReader(document.path)
+        return [
+            (page_number, self.clean_pdf_text(page.extract_text() or "", document.path.name))
+            for page_number, page in enumerate(reader.pages, start=1)
+        ]
 
     def _ensure_embeddings(self) -> None:
         if len(self._embeddings) == len(self._chunks) and self._embeddings:
@@ -275,7 +284,7 @@ class KnowledgeService:
                 continue
             if cls._is_ocr_noise(line):
                 continue
-            dedupe_key = re.sub(r"[^a-z0-9\u0E00-\u0E7F]", "", normalized_line)
+            dedupe_key = re.sub(r"[^a-z0-9\u0E00-\u0E7F\u1000-\u109F]", "", normalized_line)
             if len(dedupe_key) >= 8 and dedupe_key in seen_lines:
                 continue
             if dedupe_key:
@@ -290,11 +299,31 @@ class KnowledgeService:
         cleaned = re.sub(r"([\u0E00-\u0E7F]{4,40})(?:\s*\1){1,}", r"\1", cleaned)
         return re.sub(r"\s+", " ", cleaned).strip()
 
+    @classmethod
+    def clean_markdown_text(cls, text: str) -> str:
+        text = unicodedata.normalize("NFC", text)
+        text = re.sub(r"^---\s.*?\s---", " ", text, flags=re.DOTALL)
+        text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+        text = re.sub(r"`([^`]+)`", r"\1", text)
+        text = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", text)
+        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+        text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^\s{0,3}[-*+]\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^\s{0,3}\d+[.)]\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"[*_~>|#]", " ", text)
+        return cls.clean_pdf_text(text)
+
     @staticmethod
     def _is_ocr_noise(line: str) -> bool:
         if len(line) < 3:
             return True
-        useful = sum(character.isalnum() or "\u0E00" <= character <= "\u0E7F" or character.isspace() for character in line)
+        useful = sum(
+            character.isalnum()
+            or "\u0E00" <= character <= "\u0E7F"
+            or "\u1000" <= character <= "\u109F"
+            or character.isspace()
+            for character in line
+        )
         return useful / len(line) < 0.55
 
     @classmethod
@@ -324,11 +353,11 @@ class KnowledgeService:
 
     @staticmethod
     def _terms(text: str) -> set[str]:
-        return set(re.findall(r"[a-z0-9]{2,}|[\u0E00-\u0E7F]{3,}", text))
+        return set(re.findall(r"[a-z0-9]{2,}|[\u0E00-\u0E7F]{3,}|[\u1000-\u109F]{3,}", text))
 
     @staticmethod
     def _character_grams(text: str, width: int = 3) -> set[str]:
-        compact = re.sub(r"[^a-z0-9\u0E00-\u0E7F]", "", text)
+        compact = re.sub(r"[^a-z0-9\u0E00-\u0E7F\u1000-\u109F]", "", text)
         return {compact[index : index + width] for index in range(max(0, len(compact) - width + 1))}
 
     @classmethod
@@ -395,12 +424,21 @@ class KnowledgeService:
             pass
 
     def _display_source_name(self, document: KnowledgeDocument) -> str:
+        if document.path.suffix.casefold() in self.TEXT_DOCUMENT_EXTENSIONS:
+            return document.path.name
         return self.SOURCE_ALIASES.get(document.path.stem.casefold(), document.name)
 
     def _to_document(self, path: Path) -> KnowledgeDocument:
         relative = path.resolve().relative_to(self.knowledge_dir)
         category = relative.parts[0] if len(relative.parts) > 1 else self._infer_category(path.stem)
         return KnowledgeDocument(path.stem, category, path.stat().st_size, path.resolve())
+
+    def _document_paths(self) -> list[Path]:
+        return [
+            path
+            for path in self.knowledge_dir.rglob("*")
+            if path.is_file() and path.suffix.casefold() in self.SUPPORTED_EXTENSIONS
+        ]
 
     def _infer_category(self, name: str) -> str:
         normalized = name.casefold().replace("_", " ").replace("+", " ")

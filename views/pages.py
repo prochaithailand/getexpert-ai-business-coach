@@ -501,7 +501,10 @@ def render_knowledge_base() -> None:
             del st.session_state.selected_knowledge_document
             st.rerun()
         st.caption(f"{selected.category} | {selected.display_size}")
-        st.pdf(selected.path, height=760, key=f"pdf_viewer_{selected.path.name}")
+        if selected.path.suffix.casefold() in {".md", ".markdown"}:
+            st.markdown(selected.path.read_text(encoding="utf-8", errors="ignore"))
+        else:
+            st.pdf(selected.path, height=760, key=f"pdf_viewer_{selected.path.name}")
 
 
 def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
