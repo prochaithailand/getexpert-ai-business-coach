@@ -1,7 +1,7 @@
 import unittest
 
 from brand_config import get_brand, resolve_brand_key
-from translations import TRANSLATIONS, translate, translate_nav
+from translations import LANGUAGE_OPTIONS, TRANSLATIONS, translate, translate_nav
 
 
 class BrandConfigTests(unittest.TestCase):
@@ -20,6 +20,12 @@ class BrandConfigTests(unittest.TestCase):
 
     def test_unknown_brand_falls_back_to_getexpert(self) -> None:
         self.assertEqual(resolve_brand_key({}, {"APP_BRAND": "unknown"}), "getexpert")
+
+    def test_language_selector_options_are_available(self) -> None:
+        self.assertEqual(tuple(LANGUAGE_OPTIONS.keys()), ("th", "my", "en"))
+        self.assertEqual(LANGUAGE_OPTIONS["th"], "ไทย")
+        self.assertEqual(LANGUAGE_OPTIONS["my"], "မြန်မာ")
+        self.assertEqual(LANGUAGE_OPTIONS["en"], "English")
 
     def test_myanmar_menu_translations_are_available(self) -> None:
         self.assertEqual(translate_nav("Dashboard สมาชิก", "my"), "ဒက်ရှ်ဘုတ်")

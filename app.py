@@ -127,16 +127,13 @@ def current_language() -> str:
 
 def render_language_selector(key: str) -> None:
     language = current_language()
-    options = tuple(LANGUAGE_OPTIONS.keys())
-    selected_index = options.index(language) if language in options else 0
-    selected = st.selectbox(
-        translate("language_selector", language),
-        options,
-        index=selected_index,
-        format_func=lambda item: LANGUAGE_OPTIONS[item],
-        key=key,
-    )
-    st.session_state["language"] = normalize_language(selected)
+    st.caption(translate("language_selector", language))
+    columns = st.columns(len(LANGUAGE_OPTIONS))
+    for column, (code, label) in zip(columns, LANGUAGE_OPTIONS.items()):
+        button_type = "primary" if code == language else "secondary"
+        if column.button(label, key=f"{key}_{code}", type=button_type, use_container_width=True):
+            st.session_state["language"] = normalize_language(code)
+            st.rerun()
 
 
 def render_brand_block() -> None:
