@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 from models import ActionItem, CoachAnswer, KnowledgeMatch, MemberProfile
 from services.knowledge_service import KnowledgeService
-from services.member_activity_service import MemberActivityContext, NO_WORKPLAN_MESSAGE, is_workplan_question
+from services.member_activity_service import MemberActivityContext, is_workplan_question, no_workplan_message
 
 
 class CoachService(Protocol):
@@ -184,7 +184,7 @@ class LocalCoachService:
     ) -> CoachAnswer:
         if is_workplan_question(message):
             if not activity_context or not activity_context.has_data:
-                return CoachAnswer(NO_WORKPLAN_MESSAGE)
+                return CoachAnswer(no_workplan_message(self._detect_language(message)))
             return self._workplan_answer(profile, activity_context)
         if self.knowledge_service is None:
             return self._not_found_answer()
@@ -210,6 +210,14 @@ class LocalCoachService:
         ]
         sources = tuple(dict.fromkeys(match.document_name for match in useful_matches))
         return CoachAnswer(self._append_source_section("\n".join(lines), sources), sources)
+
+    @staticmethod
+    def _detect_language(text: str) -> str:
+        if re.search(r"[\u1000-\u109F]", text):
+            return "my"
+        if re.search(r"[A-Za-z]", text) and not re.search(r"[\u0E00-\u0E7F]", text):
+            return "en"
+        return "th"
 
     @staticmethod
     def _workplan_answer(

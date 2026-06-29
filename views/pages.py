@@ -329,7 +329,7 @@ def render_action_plan(profile: MemberProfile | None, coach: CoachService) -> No
         )
     st.write("")
     st.markdown(
-        f"**{_t('Status Level')}:** {progress.status_level} &nbsp;&nbsp; | &nbsp;&nbsp; "
+        f"**{_t('Status Level')}:** {_t(progress.status_level)} &nbsp;&nbsp; | &nbsp;&nbsp; "
         f"**{_t('Progress')}:** {progress.percentage:.0f}%"
     )
     st.progress(
@@ -569,7 +569,7 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
                 prompt,
                 profile,
                 st.session_state.coach_messages[:-1],
-                build_member_activity_context(st.session_state, profile),
+                build_member_activity_context(st.session_state, profile, _language()),
             )
         response = result.answer
         st.session_state.coach_messages.append(

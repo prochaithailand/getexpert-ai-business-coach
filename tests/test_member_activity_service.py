@@ -86,6 +86,25 @@ class MemberActivityServiceTests(unittest.TestCase):
         self.assertFalse(context.has_data)
         self.assertEqual(context.summary, NO_WORKPLAN_MESSAGE)
 
+    def test_empty_state_uses_requested_language(self) -> None:
+        my_context = build_member_activity_context({}, self.profile, "my")
+        en_context = build_member_activity_context({}, self.profile, "en")
+
+        self.assertFalse(my_context.has_data)
+        self.assertIn("စနစ်ထဲတွင်", my_context.summary)
+        self.assertNotIn("ตอนนี้ยังไม่มีข้อมูล", my_context.summary)
+        self.assertFalse(en_context.has_data)
+        self.assertEqual(
+            en_context.summary,
+            "There is no saved Workplan data in the system yet. Please add your information in the Business Workplan menu first.",
+        )
+
+    def test_local_coach_empty_workplan_answer_uses_question_language(self) -> None:
+        answer = LocalCoachService().answer_question("Workplan လုပ်ငန်းအစီအစဉ် ရှိလား", self.profile).answer
+
+        self.assertIn("စနစ်ထဲတွင်", answer)
+        self.assertNotIn("ตอนนี้ยังไม่มีข้อมูล", answer)
+
     def test_local_coach_answers_from_workplan_without_api_key(self) -> None:
         context = build_member_activity_context(
             {
