@@ -5,6 +5,7 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
+from brand_config import get_brand
 from models import ActionItem, CoachAnswer, KnowledgeMatch, MemberProfile
 from services.coach_service import LocalCoachService
 from services.knowledge_service import KnowledgeService
@@ -28,9 +29,11 @@ class OpenAICoachService(LocalCoachService):
         model: str = "gpt-5.4-mini",
         client: Any | None = None,
         openai_runtime: OpenAIRuntimeService | None = None,
+        brand: dict[str, str] | None = None,
     ) -> None:
         super().__init__(knowledge_service)
         self.model = model
+        self.brand = brand or get_brand()
         if client is not None:
             self.client = client
         else:
@@ -279,7 +282,7 @@ class OpenAICoachService(LocalCoachService):
                 store=False,
             )
             answer = (response.output_text or "").strip()
-            if not self._contains_thai(answer):
+            if not self._is_valid_answer_language(answer):
                 raise self.openai_runtime.record_validation_failure()
             return CoachAnswer(
                 self._append_source_section(answer, sources),
@@ -317,11 +320,25 @@ class OpenAICoachService(LocalCoachService):
             lambda: self.client.responses.create(**kwargs),
         )
 
-    @staticmethod
     def _build_instructions(
+        self,
         profile: MemberProfile | None,
         has_knowledge: bool,
         activity_context: MemberActivityContext | None = None,
+    ) -> str:
+        return self._build_instructions_for_brand(
+            profile,
+            has_knowledge,
+            activity_context,
+            self.brand,
+        )
+
+    @staticmethod
+    def _build_instructions_for_brand(
+        profile: MemberProfile | None,
+        has_knowledge: bool,
+        activity_context: MemberActivityContext | None,
+        brand: dict[str, str],
     ) -> str:
         member = profile or MemberProfile()
         format_rule = OpenAICoachService._business_coach_answer_format_instruction()
@@ -330,11 +347,14 @@ class OpenAICoachService(LocalCoachService):
             if has_knowledge
             else "ไม่พบข้อมูลที่เกี่ยวข้องโดยตรงในคลังความรู้ ห้ามสร้างคำตอบจากการคาดเดา"
         )
+        identity = brand.get("system_identity") or get_brand()["system_identity"]
         return f"""
-คุณคือ GetExpert AI Business Coach ผู้ช่วยพัฒนานักธุรกิจเครือข่ายยุคดิจิทัล ตอบเป็นภาษาไทย ชัดเจน ใช้งานได้จริง และอ้างอิงจากคลังความรู้ของระบบ
+{identity}
 
 ข้อกำหนดสำคัญ:
-- ตอบเป็นภาษาไทยเท่านั้น ใช้ภาษาสุภาพ เป็นมืออาชีพ เข้าใจง่าย และให้กำลังใจอย่างเหมาะสม
+- หากเป็น GetExpert mode ให้ตอบเป็นภาษาไทยเป็นหลักตามระบบเดิม
+- หากเป็น TG Life mode ให้ตอบภาษาเดียวกับผู้ใช้: เมียนมาร์/พม่าให้ตอบเมียนมาร์, ไทยให้ตอบไทย, อังกฤษให้ตอบอังกฤษ
+- ใช้ภาษาสุภาพ เป็นมืออาชีพ เข้าใจง่าย และให้กำลังใจอย่างเหมาะสม
 - ให้คำแนะนำที่นำไปปฏิบัติได้จริง โดยเน้นการตลาดออนไลน์ การสร้างคอนเทนต์ ธุรกิจ MLM/Network Marketing
   การสร้างรายชื่อผู้มุ่งหวัง และการบริหารประสิทธิภาพส่วนบุคคล
 - ห้ามรับรองรายได้ ห้ามกล่าวอ้างเกินจริง และต้องคำนึงถึงจริยธรรมและข้อกำหนดของบริษัทขายตรง
@@ -436,6 +456,11 @@ class OpenAICoachService(LocalCoachService):
     @staticmethod
     def _contains_thai(text: str) -> bool:
         return bool(re.search(r"[\u0E00-\u0E7F]", text))
+
+    def _is_valid_answer_language(self, text: str) -> bool:
+        if self.brand.get("key") == "tglife":
+            return bool(text.strip())
+        return self._contains_thai(text)
 
     @classmethod
     def _append_source_section(cls, answer: str, sources: Sequence[str]) -> str:

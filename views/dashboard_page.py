@@ -24,7 +24,9 @@ from services.pdf_report_service import (
 
 
 def render_member_dashboard(profile: MemberProfile | None, coach: CoachService) -> None:
-    st.title("Dashboard สมาชิก")
+    brand = st.session_state.get("_active_brand", {})
+    title = "TG Life Member Dashboard" if brand.get("key") == "tglife" else "Dashboard สมาชิก"
+    st.title(title)
     st.markdown(
         "<p class='section-lead'>ภาพรวมความสำเร็จส่วนบุคคลจากโปรไฟล์ แผน 30 วัน Workplan และการใช้งานเครื่องมือ AI</p>",
         unsafe_allow_html=True,

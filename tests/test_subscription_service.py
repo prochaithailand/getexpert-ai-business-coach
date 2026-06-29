@@ -150,7 +150,7 @@ class SubscriptionServiceTests(unittest.TestCase):
         self.assertTrue(approved.trial_used)
 
     def test_future_trial_from_membership_fields_has_main_access(self):
-        now = datetime(2026, 6, 25, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         user = AppUser.from_dict({
             "email": "trial@example.com",
             "full_name": "Trial",
@@ -175,7 +175,7 @@ class SubscriptionServiceTests(unittest.TestCase):
         self.assertNotIn("ชำระเงิน / เปิดใช้งาน", navigation)
 
     def test_expired_trial_from_membership_fields_is_payment_only(self):
-        now = datetime(2026, 6, 25, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         user = AppUser.from_dict({
             "email": "expired@example.com",
             "full_name": "Expired Trial",

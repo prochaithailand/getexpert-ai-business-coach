@@ -20,9 +20,15 @@ from services.subscription_service import (
 )
 
 
+def _active_brand() -> dict[str, str]:
+    return st.session_state.get("_active_brand", {})
+
+
 def render_login(store: SessionUserStore) -> None:
+    brand = _active_brand()
+    app_name = brand.get("app_name", "GetExpert AI Business Coach")
     st.title("เข้าสู่ระบบ")
-    st.markdown("<p class='section-lead'>เข้าสู่ระบบเพื่อใช้งานระบบพัฒนาธุรกิจ GetExpert</p>", unsafe_allow_html=True)
+    st.markdown(f"<p class='section-lead'>เข้าสู่ระบบเพื่อใช้งาน {app_name}</p>", unsafe_allow_html=True)
     login_in_progress = bool(st.session_state.get("login_in_progress", False))
     login_error = st.session_state.pop("login_error_message", "")
     if login_in_progress:
@@ -76,8 +82,10 @@ def render_login(store: SessionUserStore) -> None:
 
 
 def render_register(store: SessionUserStore, referral_code: str = "") -> None:
+    brand = _active_brand()
+    short_name = brand.get("short_name", "GetExpert")
     st.title("สมัครสมาชิก")
-    st.markdown("<p class='section-lead'>สร้างบัญชีใหม่เพื่อเริ่มต้นใช้งานระบบ บัญชีใหม่จะเป็นสมาชิกโดยอัตโนมัติ</p>", unsafe_allow_html=True)
+    st.markdown(f"<p class='section-lead'>สร้างบัญชีใหม่เพื่อเริ่มต้นใช้งาน {short_name} บัญชีใหม่จะเป็นสมาชิกโดยอัตโนมัติ</p>", unsafe_allow_html=True)
     if referral_code:
         st.info("ลิงก์แนะนำนี้ใช้สำหรับบันทึกสิทธิ์ referral เท่านั้น ไม่ได้เพิ่มคุณเข้าทีมโดยอัตโนมัติ")
     with st.form("register_form"):
@@ -87,12 +95,12 @@ def render_register(store: SessionUserStore, referral_code: str = "") -> None:
         st.text_input("บทบาท", value="สมาชิก", disabled=True)
         submitted = st.form_submit_button("สมัครสมาชิก", type="primary", width="stretch")
         st.caption(
-            "เมื่อสมัครใช้งาน GetExpert คุณยินยอมให้ระบบส่งอีเมลที่เกี่ยวข้องกับบัญชีของคุณ "
+            f"เมื่อสมัครใช้งาน {short_name} คุณยินยอมให้ระบบส่งอีเมลที่เกี่ยวข้องกับบัญชีของคุณ "
             "เช่น การยืนยันการสมัคร การแจ้งสถานะทดลองใช้ฟรี การชำระเงิน และการเปิดใช้งานบริการ"
         )
         marketing_email_opt_in = st.checkbox(
             "ฉันต้องการรับบทความ เทคนิคการใช้ AI เพื่อพัฒนาธุรกิจ ข่าวสาร "
-            "และข้อเสนอจาก GetExpert ทางอีเมล",
+            f"และข้อเสนอจาก {short_name} ทางอีเมล",
             value=False,
         )
     if submitted:
@@ -142,9 +150,11 @@ def render_reset_password(
     store: SessionUserStore,
     recovery_access_token: str,
 ) -> None:
+    brand = _active_brand()
+    short_name = brand.get("short_name", "GetExpert")
     st.title("ตั้งรหัสผ่านใหม่")
     st.markdown(
-        "<p class='section-lead'>กำหนดรหัสผ่านใหม่สำหรับบัญชี GetExpert ของคุณ</p>",
+        f"<p class='section-lead'>กำหนดรหัสผ่านใหม่สำหรับบัญชี {short_name} ของคุณ</p>",
         unsafe_allow_html=True,
     )
     with st.form("reset_password_form", clear_on_submit=True):

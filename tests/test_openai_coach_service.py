@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from brand_config import get_brand
 from models import KnowledgeMatch, MemberProfile
 from services.knowledge_service import KnowledgeService
 from services.member_activity_service import MemberActivityContext, NO_WORKPLAN_MESSAGE
@@ -223,6 +224,32 @@ class OpenAICoachServiceTests(unittest.TestCase):
         self.assertEqual(result.metadata["error_category"], "unknown")
         self.assertEqual(result.metadata["model"], "")
         self.assertNotIn("offline", str(result.metadata))
+
+    def test_tglife_brand_prompt_supports_multilingual_answers(self) -> None:
+        responses = FakeResponses(
+            "🎯 Executive Summary\nFocus on three prospects today.\n\n"
+            "──────────────\n\n"
+            "📖 รายละเอียด\nUse your Workplan and follow up consistently.\n\n"
+            "──────────────\n\n"
+            "✅ สิ่งที่ควรทำต่อ\n1. Contact your top A prospects."
+        )
+        service = OpenAICoachService(
+            StubKnowledgeService([self.match]),
+            client=FakeClient(responses),
+            brand=get_brand({}, {"APP_BRAND": "tglife"}),
+        )
+
+        result = service.answer_question(
+            "How should I grow my TG Life team this week?",
+            self.profile,
+        )
+
+        call = responses.calls[0]
+        self.assertIn("TG Life AI Business Coach powered by GetExpert", call["instructions"])
+        self.assertIn("Answer in the same language as the user", call["instructions"])
+        self.assertIn("Burmese/Myanmar", call["instructions"])
+        self.assertEqual(result.metadata["answer_source"], "openai")
+        self.assertIn("Focus on three prospects", result.answer)
 
     def test_openai_action_plan_receives_all_profile_fields(self) -> None:
         days = [

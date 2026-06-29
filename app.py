@@ -7,6 +7,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
+from brand_config import get_brand
 from config import (
     APP_SUBTITLE,
     APP_TITLE,
@@ -32,6 +33,7 @@ from services.permissions import visible_navigation
 from services.subscription_service import LOCKED_MESSAGE, has_active_subscription
 from services.supabase_service import SupabaseService
 from services.settings_service import load_supabase_config
+from translations import LANGUAGE_OPTIONS, normalize_language, translate, translate_nav
 from ui.styles import apply_global_styles
 from views.pages import (
     render_action_plan,
@@ -58,11 +60,17 @@ from views.auth_pages import (
 from views.payment_page import render_payment_page
 
 
+ACTIVE_BRAND = get_brand(st.secrets, os.environ)
 st.set_page_config(
-    page_title=APP_TITLE,
+    page_title=ACTIVE_BRAND["app_name"],
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+st.session_state["_active_brand"] = ACTIVE_BRAND
+if "language" not in st.session_state:
+    st.session_state["language"] = "th"
+st.session_state["language"] = normalize_language(st.session_state.get("language"))
 
 apply_global_styles()
 
@@ -111,6 +119,42 @@ def get_setting(name: str, default: str = "") -> str:
         return str(st.secrets.get(name, default))
     except Exception:
         return default
+
+
+def current_language() -> str:
+    return normalize_language(st.session_state.get("language"))
+
+
+def render_language_selector(key: str) -> None:
+    language = current_language()
+    options = tuple(LANGUAGE_OPTIONS.keys())
+    selected_index = options.index(language) if language in options else 0
+    selected = st.selectbox(
+        translate("language_selector", language),
+        options,
+        index=selected_index,
+        format_func=lambda item: LANGUAGE_OPTIONS[item],
+        key=key,
+    )
+    st.session_state["language"] = normalize_language(selected)
+
+
+def render_brand_block() -> None:
+    powered_by = ACTIVE_BRAND.get("powered_by", "")
+    powered_html = f"<div class='brand-powered'>{powered_by}</div>" if powered_by else ""
+    st.markdown(
+        f"""
+        <div class="brand-block">
+            <div class="brand-mark">{ACTIVE_BRAND.get("mark", "GE")}</div>
+            <div>
+                <div class="brand-name">{ACTIVE_BRAND["app_name"]}</div>
+                <div class="brand-tagline">{ACTIVE_BRAND.get("subtitle") or APP_SUBTITLE}</div>
+                {powered_html}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_mobile_menu_toggle() -> None:
@@ -462,7 +506,11 @@ def get_coach_service() -> LocalCoachService:
             openai_runtime=runtime,
         )
         return OpenAICoachService(
-            knowledge_service, model=model, client=client, openai_runtime=runtime
+            knowledge_service,
+            model=model,
+            client=client,
+            openai_runtime=runtime,
+            brand=ACTIVE_BRAND,
         )
     OpenAIRuntimeService(
         GLOBAL_OPENAI_STATE,
@@ -518,22 +566,18 @@ if pending_recovery_token:
 
 if authenticated_user is None:
     with st.sidebar:
-        st.markdown(
-            f"""
-            <div class="brand-block">
-                <div class="brand-mark">GE</div>
-                <div>
-                    <div class="brand-name">{APP_TITLE}</div>
-                    <div class="brand-tagline">{APP_SUBTITLE}</div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        render_brand_block()
+        render_language_selector("auth_language")
+        language = current_language()
         auth_page = st.radio(
-            "เมนูบัญชี",
+            translate("Account Menu", language),
             ("เข้าสู่ระบบ", "สมัครสมาชิก", "ลืมรหัสผ่าน"),
             label_visibility="collapsed",
+            format_func=lambda item: {
+                "เข้าสู่ระบบ": translate("Login", current_language()),
+                "สมัครสมาชิก": translate("Sign Up", current_language()),
+                "ลืมรหัสผ่าน": "ลืมรหัสผ่าน" if current_language() == "th" else ("စကားဝှက်မေ့နေပါသလား" if current_language() == "my" else "Forgot Password"),
+            }.get(item, item),
         )
     render_mobile_menu_toggle()
     if recovery_message := st.session_state.pop("password_recovery_error", None):
@@ -569,18 +613,9 @@ if pending_invite_code:
     render_team_invite_confirmation(authenticated_user, pending_invite_code)
 
 with st.sidebar:
-    st.markdown(
-        f"""
-        <div class="brand-block">
-            <div class="brand-mark">GE</div>
-            <div>
-                <div class="brand-name">{APP_TITLE}</div>
-                <div class="brand-tagline">{APP_SUBTITLE}</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    render_brand_block()
+    render_language_selector("main_language")
+    language = current_language()
     navigation_items = visible_navigation(NAV_ITEMS, authenticated_user)
     if st.session_state.get("main_navigation") not in navigation_items:
         st.session_state["main_navigation"] = (
@@ -592,10 +627,11 @@ with st.sidebar:
             else navigation_items[0]
         )
     page = st.radio(
-        "เมนูหลัก",
+        translate("Main Menu", language),
         navigation_items,
         label_visibility="collapsed",
         key="main_navigation",
+        format_func=lambda item: translate_nav(item, current_language()),
     )
     previous_page = st.session_state.get("_previous_main_navigation")
     should_collapse_sidebar = bool(previous_page and previous_page != page)

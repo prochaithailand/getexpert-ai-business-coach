@@ -18,6 +18,10 @@ from services.supabase_service import get_authenticated_supabase_user, get_supab
 from ui.ai_coaching_pipeline import render_ai_coaching_pipeline
 
 
+def _active_brand() -> dict[str, str]:
+    return st.session_state.get("_active_brand", {})
+
+
 def _page_header(title: str, description: str) -> None:
     st.title(title)
     st.markdown(f"<p class='section-lead'>{description}</p>", unsafe_allow_html=True)
@@ -63,6 +67,8 @@ def _navigate_to(page: str) -> None:
 
 
 def _render_getting_started(profile: MemberProfile | None) -> None:
+    brand = _active_brand()
+    short_name = brand.get("short_name", "GetExpert")
     statuses = build_onboarding_status(st.session_state, profile)
     steps = (
         (
@@ -95,7 +101,7 @@ def _render_getting_started(profile: MemberProfile | None) -> None:
     with st.container(key="onboarding_sticky_summary"):
         st.markdown(
             "<div class='onboarding-title'>"
-            "<span class='onboarding-title-desktop'>🚀 เริ่มต้นใช้งาน GetExpert</span>"
+            f"<span class='onboarding-title-desktop'>🚀 เริ่มต้นใช้งาน {short_name}</span>"
             "<span class='onboarding-title-mobile'>🚀 เริ่มต้นใช้งาน</span>"
             "</div>",
             unsafe_allow_html=True,
@@ -123,21 +129,27 @@ def _render_getting_started(profile: MemberProfile | None) -> None:
 
 
 def render_home(profile: MemberProfile | None) -> None:
+    brand = _active_brand()
+    short_name = brand.get("short_name", "GetExpert")
+    hero_title = brand.get("hero_title", "GetExpert โค้ชธุรกิจ AI")
+    powered_by = brand.get("powered_by", "")
     _render_getting_started(profile)
     st.write("")
     greeting = f"ยินดีต้อนรับกลับมา คุณ{profile.name.split()[0]}" if profile and profile.name else "วางเป้าหมายให้ชัดเจน และเติบโตอย่างมั่นใจ"
+    powered_html = f"<div class='hero-powered'>{powered_by}</div>" if powered_by else ""
     st.markdown(
         f"""
         <section class="hero">
             <div class="hero-kicker">ระบบ AI เพื่อความสำเร็จของสมาชิก</div>
-            <h1>GetExpert โค้ชธุรกิจ AI</h1>
+            <h1>{hero_title}</h1>
+            {powered_html}
             <p>{greeting} เปลี่ยนเป้าหมายให้เป็นแผนลงมือทำที่สม่ำเสมอ สร้างคอนเทนต์ที่มีคุณภาพ และพัฒนาการสื่อสารทางธุรกิจอย่างมืออาชีพ</p>
         </section>
         """,
         unsafe_allow_html=True,
     )
     st.write("")
-    st.subheader("พื้นที่พัฒนาธุรกิจของคุณ")
+    st.subheader(f"พื้นที่พัฒนาธุรกิจของคุณบน {short_name}")
     cols = st.columns(5)
     cards = (
         ("01", "โปรไฟล์สมาชิก", "กำหนดเป้าหมาย ประสบการณ์ และเวลาที่พร้อมลงมือทำ"),
@@ -483,12 +495,28 @@ def render_knowledge_base() -> None:
 
 
 def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
-    _page_header("โค้ช AI จากคลังความรู้", "ถามคำถามจากคู่มือในคลังความรู้ และรับคำแนะนำภาษาไทยพร้อมชื่อเอกสารอ้างอิง")
+    brand = _active_brand()
+    coach_title = (
+        "TG Life AI Business Coach"
+        if brand.get("key") == "tglife"
+        else "โค้ช AI จากคลังความรู้"
+    )
+    coach_description = (
+        "ถามคำถามได้ทั้งภาษาไทย เมียนมาร์ หรืออังกฤษ เพื่อรับคำแนะนำสำหรับสมาชิก TG Life"
+        if brand.get("key") == "tglife"
+        else "ถามคำถามจากคู่มือในคลังความรู้ และรับคำแนะนำภาษาไทยพร้อมชื่อเอกสารอ้างอิง"
+    )
+    _page_header(coach_title, coach_description)
     if "coach_messages" not in st.session_state:
+        greeting = (
+            "မင်္ဂလာပါ။ TG Life AI Business Coach powered by GetExpert พร้อมช่วยคุณเรียนรู้ พัฒนาทีม และติดตามผู้มุ่งหวัง วันนี้อยากให้ช่วยเรื่องไหนครับ"
+            if brand.get("key") == "tglife"
+            else "สวัสดีครับ โค้ชพร้อมช่วยค้นคำตอบจากฐานความรู้ของคุณ วันนี้อยากพัฒนาเรื่องไหนเป็นพิเศษครับ"
+        )
         st.session_state.coach_messages = [
             {
                 "role": "assistant",
-                "content": "สวัสดีครับ โค้ชพร้อมช่วยค้นคำตอบจากฐานความรู้ของคุณ วันนี้อยากพัฒนาเรื่องไหนเป็นพิเศษครับ",
+                "content": greeting,
                 "sources": [],
             }
         ]
@@ -510,7 +538,12 @@ def render_ai_coach(profile: MemberProfile | None, coach: CoachService) -> None:
             st.markdown(message["content"])
             if message["role"] == "assistant":
                 _render_answer_source(message.get("metadata", {}))
-    if prompt := st.chat_input("ถามเกี่ยวกับ 5 โมดูล แผนงาน MLM, LINE OA, TikTok, Canva หรือคู่มืออื่น ๆ..."):
+    placeholder = (
+        "Ask in Thai, Myanmar, or English about TG Life business, team building, prospects, or Workplan..."
+        if brand.get("key") == "tglife"
+        else "ถามเกี่ยวกับ 5 โมดูล แผนงาน MLM, LINE OA, TikTok, Canva หรือคู่มืออื่น ๆ..."
+    )
+    if prompt := st.chat_input(placeholder):
         st.session_state.coach_messages.append({"role": "user", "content": prompt})
         supabase = get_supabase_service(st.session_state)
         authenticated = get_authenticated_supabase_user(st.session_state)
