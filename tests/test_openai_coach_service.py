@@ -273,9 +273,9 @@ class OpenAICoachServiceTests(unittest.TestCase):
         responses = FakeResponses(
             "🎯 Executive Summary\nFocus on three prospects today.\n\n"
             "──────────────\n\n"
-            "📖 รายละเอียด\nUse your Workplan and follow up consistently.\n\n"
+            "📖 Details\nUse your Workplan and follow up consistently.\n\n"
             "──────────────\n\n"
-            "✅ สิ่งที่ควรทำต่อ\n1. Contact your top A prospects."
+            "✅ Next Steps\n1. Contact your top A prospects."
         )
         service = OpenAICoachService(
             StubKnowledgeService([self.match]),
@@ -292,8 +292,54 @@ class OpenAICoachServiceTests(unittest.TestCase):
         self.assertIn("TG Life AI Business Coach powered by GetExpert", call["instructions"])
         self.assertIn("Answer in the same language as the user", call["instructions"])
         self.assertIn("Burmese/Myanmar", call["instructions"])
+        self.assertIn("🎯 Executive Summary", call["instructions"])
+        self.assertIn("📖 Details", call["instructions"])
+        self.assertIn("✅ Next Steps", call["instructions"])
+        self.assertNotIn("📖 รายละเอียด", call["instructions"])
+        self.assertNotIn("✅ สิ่งที่ควรทำต่อ", call["instructions"])
         self.assertEqual(result.metadata["answer_source"], "openai")
         self.assertIn("Focus on three prospects", result.answer)
+
+    def test_tglife_burmese_question_uses_burmese_response_headings(self) -> None:
+        responses = FakeResponses(
+            "🎯 အကျဉ်းချုပ်\nTG Life အဖွဲ့တည်ဆောက်မှုကို အဆင့်လိုက်လုပ်ပါ။\n\n"
+            "──────────────\n\n"
+            "📖 အသေးစိတ်\nWorkplan နှင့် CRM အချက်အလက်ကို အသုံးပြုပါ။\n\n"
+            "──────────────\n\n"
+            "✅ ဆက်လက်လုပ်ဆောင်ရန်\n1. ယနေ့ A အဆင့် prospect များကို ဆက်သွယ်ပါ။"
+        )
+        service = OpenAICoachService(
+            StubKnowledgeService([self.match]),
+            client=FakeClient(responses),
+            brand=get_brand({}, {"APP_BRAND": "tglife"}),
+        )
+
+        result = service.answer_question("TG Life အဖွဲ့ကို ဘယ်လိုတည်ဆောက်ရမလဲ", self.profile)
+
+        call = responses.calls[0]
+        self.assertIn("🎯 အကျဉ်းချုပ်", call["instructions"])
+        self.assertIn("📖 အသေးစိတ်", call["instructions"])
+        self.assertIn("✅ ဆက်လက်လုပ်ဆောင်ရန်", call["instructions"])
+        self.assertNotIn("📖 รายละเอียด", call["instructions"])
+        self.assertNotIn("✅ สิ่งที่ควรทำต่อ", call["instructions"])
+        self.assertIn("🎯 အကျဉ်းချုပ်", result.answer)
+
+    def test_tglife_burmese_openai_failure_uses_burmese_fallback_headings(self) -> None:
+        responses = FakeResponses(error=RuntimeError("offline"))
+        service = OpenAICoachService(
+            StubKnowledgeService([self.match]),
+            client=FakeClient(responses),
+            brand=get_brand({}, {"APP_BRAND": "tglife"}),
+        )
+
+        result = service.answer_question("TG Life အဖွဲ့ကို ဘယ်လိုတည်ဆောက်ရမလဲ", self.profile)
+
+        self.assertIn("🎯 အကျဉ်းချုပ်", result.answer)
+        self.assertIn("📖 အသေးစိတ်", result.answer)
+        self.assertIn("✅ ဆက်လက်လုပ်ဆောင်ရန်", result.answer)
+        self.assertNotIn("**สรุปคำตอบ**", result.answer)
+        self.assertNotIn("**ประเด็นสำคัญ**", result.answer)
+        self.assertNotIn("**แนวทางนำไปใช้**", result.answer)
 
     def test_openai_action_plan_receives_all_profile_fields(self) -> None:
         days = [

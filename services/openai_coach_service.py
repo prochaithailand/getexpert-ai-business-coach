@@ -171,7 +171,7 @@ class OpenAICoachService(LocalCoachService):
 ห้ามแต่งชื่อ ตัวเลข สถานะ หรือรับรองรายได้ หากข้อมูลไม่พอให้บอกอย่างตรงไปตรงมา
 ตอบด้วย bullet points และระบุสิ่งที่ควรทำต่ออย่างชัดเจน
 """.strip()
-        instructions = f"{instructions}\n\n{self._business_coach_answer_format_instruction()}"
+        instructions = f"{instructions}\n\n{self._business_coach_answer_format_instruction(self._answer_language(question))}"
         messages = [
             {"role": item.get("role"), "content": str(item.get("content", ""))[:1200]}
             for item in history[-6:]
@@ -265,7 +265,8 @@ class OpenAICoachService(LocalCoachService):
                     message,
                 )
             )
-        instructions = self._build_instructions(profile, bool(matches), activity_context)
+        answer_language = self._answer_language(message)
+        instructions = self._build_instructions(profile, bool(matches), activity_context, answer_language)
         input_messages = self._history_messages(history)
         input_messages.append(
             {
@@ -297,14 +298,11 @@ class OpenAICoachService(LocalCoachService):
         except OpenAIRuntimeError as error:
             fallback = super().answer_question(message, profile, history, activity_context)
             if error.category == "response_validation":
-                notice = "AI หลักตอบกลับมาแล้ว แต่ระบบไม่สามารถจัดรูปแบบคำตอบได้ จึงใช้คำตอบสำรองก่อน"
+                notice = self._fallback_notice("response_validation", message)
             elif error.category in {"timeout", "connection_error", "server_error", "rate_limit"}:
-                notice = (
-                    "ขณะนี้ AI หลักตอบช้าหรือเชื่อมต่อไม่ได้ ระบบจึงใช้คำตอบสำรองจากข้อมูลภายในก่อน "
-                    "กรุณาลองใหม่อีกครั้งในภายหลัง"
-                )
+                notice = self._fallback_notice("temporary_error", message)
             else:
-                notice = "ขณะนี้ AI หลักยังไม่พร้อมใช้งาน ระบบจึงใช้คำตอบสำรองจากข้อมูลภายในก่อน"
+                notice = self._fallback_notice("general_error", message)
             return CoachAnswer(
                 notice + "\n\n" + self._replace_source_section_for_question(fallback.answer, fallback.sources, message),
                 fallback.sources,
@@ -326,12 +324,14 @@ class OpenAICoachService(LocalCoachService):
         profile: MemberProfile | None,
         has_knowledge: bool,
         activity_context: MemberActivityContext | None = None,
+        answer_language: str = "th",
     ) -> str:
         return self._build_instructions_for_brand(
             profile,
             has_knowledge,
             activity_context,
             self.brand,
+            answer_language,
         )
 
     @staticmethod
@@ -340,9 +340,10 @@ class OpenAICoachService(LocalCoachService):
         has_knowledge: bool,
         activity_context: MemberActivityContext | None,
         brand: dict[str, str],
+        answer_language: str = "th",
     ) -> str:
         member = profile or MemberProfile()
-        format_rule = OpenAICoachService._business_coach_answer_format_instruction()
+        format_rule = OpenAICoachService._business_coach_answer_format_instruction(answer_language)
         knowledge_rule = (
             "มีข้อมูลจากคลังความรู้แนบมากับคำถาม ให้ใช้เป็นความรู้สนับสนุนและห้ามอ้างเอกสารอื่นที่ไม่ได้แนบมา"
             if has_knowledge
@@ -367,9 +368,9 @@ class OpenAICoachService(LocalCoachService):
 - {knowledge_rule}
 - {format_rule}
 - สรุปความหมายจากข้อมูลอ้างอิงด้วยภาษาของคุณเอง ห้ามคัดลอกข้อความดิบ ห้ามแสดง OCR noise และห้ามกล่าวถึงชื่อไฟล์หรือ path
-- อธิบายด้วยภาษาไทยง่าย ๆ ประโยคสั้น และหลีกเลี่ยงศัพท์เทคนิคที่ไม่จำเป็น
+- อธิบายด้วยภาษาของผู้ใช้ให้เข้าใจง่าย ประโยคสั้น และหลีกเลี่ยงศัพท์เทคนิคที่ไม่จำเป็น
 - สำหรับคำถามเชิงวิเคราะห์หรือกลยุทธ์ ห้ามใช้หัวข้อเก่า “สรุปคำตอบ”, “ประเด็นสำคัญ”, หรือ “แนวทางนำไปใช้”
-- ให้ใช้รูปแบบ Phase 3 จากกฎรูปแบบคำตอบเท่านั้น โดยเริ่มจาก “🎯 Executive Summary” ตามด้วย “📖 รายละเอียด” และ “✅ สิ่งที่ควรทำต่อ”
+- ให้ใช้รูปแบบ Phase 3 จากกฎรูปแบบคำตอบเท่านั้น โดยใช้หัวข้อให้ตรงกับภาษาคำตอบ
 - ไม่ต้องเขียนส่วนแหล่งข้อมูลอ้างอิง เพราะระบบจะเติมชื่อเอกสารที่ใช้ให้โดยอัตโนมัติ
 
 บริบทสมาชิก:
@@ -387,26 +388,35 @@ class OpenAICoachService(LocalCoachService):
 """.strip()
 
     @staticmethod
-    def _business_coach_answer_format_instruction() -> str:
-        return """
+    def _response_headings(language: str) -> tuple[str, str, str]:
+        if language == "my":
+            return ("🎯 အကျဉ်းချုပ်", "📖 အသေးစိတ်", "✅ ဆက်လက်လုပ်ဆောင်ရန်")
+        if language == "en":
+            return ("🎯 Executive Summary", "📖 Details", "✅ Next Steps")
+        return ("🎯 Executive Summary", "📖 รายละเอียด", "✅ สิ่งที่ควรทำต่อ")
+
+    @staticmethod
+    def _business_coach_answer_format_instruction(language: str = "th") -> str:
+        summary_heading, detail_heading, action_heading = OpenAICoachService._response_headings(language)
+        return f"""
 กฎรูปแบบคำตอบ Phase 3:
 สำหรับคำถามเชิงวิเคราะห์ กลยุทธ์ วางแผนธุรกิจ CRM Workplan Team Dashboard ผู้มุ่งหวัง หรือคำถามที่ต้องการคำตอบยาว ให้ใช้โครงสร้างนี้:
-ต้องใช้หัวข้อ 3 บรรทัดนี้แบบตรงตัว ห้ามเปลี่ยนคำ ห้ามแปล ห้ามเติม markdown heading อื่น และห้ามใช้หัวข้อแทน เช่น สรุปคำตอบ หรือ แนวทางนำไปใช้:
-🎯 Executive Summary
-📖 รายละเอียด
-✅ สิ่งที่ควรทำต่อ
+ต้องใช้หัวข้อ 3 บรรทัดนี้แบบตรงตัวตามภาษาคำตอบ ห้ามเปลี่ยนคำ ห้ามเติม markdown heading อื่น และห้ามใช้หัวข้อแทน เช่น สรุปคำตอบ หรือ แนวทางนำไปใช้:
+{summary_heading}
+{detail_heading}
+{action_heading}
 
-🎯 Executive Summary
+{summary_heading}
 สรุปภาพรวมสั้น ชัดเจน และบอกทิศทางสำคัญ 2-4 ประโยค
 
 ──────────────
 
-📖 รายละเอียด
-อธิบายเหตุผล บริบท ข้อมูลที่เกี่ยวข้อง และข้อควรระวังด้วยภาษาไทยที่เข้าใจง่าย
+{detail_heading}
+อธิบายเหตุผล บริบท ข้อมูลที่เกี่ยวข้อง และข้อควรระวังด้วยภาษาที่เข้าใจง่าย
 
 ──────────────
 
-✅ สิ่งที่ควรทำต่อ
+{action_heading}
 1. ระบุ action ที่ทำได้จริง
 2. จัดลำดับความสำคัญ
 3. ระบุสิ่งที่ควรติดตามหรือวัดผล
@@ -501,6 +511,31 @@ class OpenAICoachService(LocalCoachService):
         if self.brand.get("key") == "tglife":
             return self._detect_question_language(question)
         return "th"
+
+    def _fallback_language(self, text: str) -> str:
+        return self._answer_language(text)
+
+    def _fallback_notice(self, reason: str, question: str) -> str:
+        language = self._answer_language(question)
+        messages = {
+            "response_validation": {
+                "my": "AI အဓိကစနစ်က အဖြေပြန်ပေးပြီးဖြစ်သော်လည်း စနစ်က အဖြေပုံစံကို စနစ်တကျ မပြင်ဆင်နိုင်သေးသောကြောင့် အတွင်းပိုင်းအချက်အလက်အခြေခံ အရန်အဖြေကို အသုံးပြုထားပါသည်။",
+                "en": "The main AI responded, but the system could not format the answer correctly, so it is using the internal fallback answer for now.",
+                "th": "AI หลักตอบกลับมาแล้ว แต่ระบบไม่สามารถจัดรูปแบบคำตอบได้ จึงใช้คำตอบสำรองก่อน",
+            },
+            "temporary_error": {
+                "my": "ယခုအချိန်တွင် AI အဓိကစနစ် တုံ့ပြန်မှုနှေးနေသည် သို့မဟုတ် ချိတ်ဆက်၍ မရသေးပါ။ စနစ်သည် အတွင်းပိုင်းအချက်အလက်အခြေခံ အရန်အဖြေကို ယာယီအသုံးပြုထားပါသည်။ ကျေးဇူးပြု၍ နောက်မှ ထပ်မံစမ်းကြည့်ပါ။",
+                "en": "The main AI is responding slowly or cannot connect right now, so the system is using the internal fallback answer for now. Please try again later.",
+                "th": "ขณะนี้ AI หลักตอบช้าหรือเชื่อมต่อไม่ได้ ระบบจึงใช้คำตอบสำรองจากข้อมูลภายในก่อน กรุณาลองใหม่อีกครั้งในภายหลัง",
+            },
+            "general_error": {
+                "my": "ယခုအချိန်တွင် AI အဓိကစနစ် မพร้อมသေးသောကြောင့် စနစ်သည် အတွင်းပိုင်းအချက်အလက်အခြေခံ အရန်အဖြေကို အသုံးပြုထားပါသည်။",
+                "en": "The main AI is not available right now, so the system is using the internal fallback answer for now.",
+                "th": "ขณะนี้ AI หลักยังไม่พร้อมใช้งาน ระบบจึงใช้คำตอบสำรองจากข้อมูลภายในก่อน",
+            },
+        }
+        selected = messages.get(reason, messages["general_error"])
+        return selected.get(language, selected["th"])
 
     def _is_valid_answer_language(self, text: str) -> bool:
         if self.brand.get("key") == "tglife":

@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from models import ActionItem, CoachAnswer, KnowledgeMatch, MemberProfile
 from services.knowledge_service import KnowledgeService
 from services.member_activity_service import MemberActivityContext, is_workplan_question, no_workplan_message
+from translations import translate
 
 
 class CoachService(Protocol):
@@ -182,34 +183,36 @@ class LocalCoachService:
         history: Sequence[dict[str, Any]] = (),
         activity_context: MemberActivityContext | None = None,
     ) -> CoachAnswer:
+        language = self._fallback_language(message)
         if is_workplan_question(message):
             if not activity_context or not activity_context.has_data:
-                return CoachAnswer(no_workplan_message(self._detect_language(message)))
-            return self._workplan_answer(profile, activity_context)
+                return CoachAnswer(no_workplan_message(language))
+            return self._workplan_answer(profile, activity_context, language)
         if self.knowledge_service is None:
-            return self._not_found_answer()
+            return self._not_found_answer(language)
         matches = self.knowledge_service.search_text(message, limit=4)
         if not matches:
-            return self._not_found_answer()
+            return self._not_found_answer(language)
 
         first_name = profile.name.split()[0] if profile and profile.name else "สมาชิก"
         useful_matches = [match for match in matches if len(self._clean_excerpt(match.text)) >= 50]
         if not useful_matches:
-            return self._not_found_answer()
+            return self._not_found_answer(language)
 
         points = [self._summary_point(match.text) for match in useful_matches[:3]]
+        summary_heading, detail_heading, action_heading = self._response_headings(language)
         lines = [
-            "**สรุปคำตอบ**",
+            summary_heading,
             f"คุณ{first_name} คลังความรู้มีแนวทางที่เกี่ยวข้องกับคำถามนี้ โดยเน้นการวางแผนให้ชัดเจนและลงมือทำอย่างสม่ำเสมอ",
-            "\n**ประเด็นสำคัญ**",
+            f"\n{detail_heading}",
             *(f"- {point}" for point in points if point),
-            "\n**แนวทางนำไปใช้**",
+            f"\n{action_heading}",
             "- เลือกหนึ่งแนวทางที่สอดคล้องกับเป้าหมายของคุณ",
             "- กำหนดกิจกรรมที่ทำได้ภายในเวลาที่มีในแต่ละวัน",
             "- บันทึกผลและทบทวนเพื่อปรับแผนในรอบถัดไป",
         ]
         sources = tuple(dict.fromkeys(match.document_name for match in useful_matches))
-        return CoachAnswer(self._append_source_section("\n".join(lines), sources), sources)
+        return CoachAnswer(LocalCoachService._append_source_section("\n".join(lines), sources, language), sources)
 
     @staticmethod
     def _detect_language(text: str) -> str:
@@ -219,18 +222,31 @@ class LocalCoachService:
             return "en"
         return "th"
 
+    def _fallback_language(self, text: str) -> str:
+        return "th"
+
+    @staticmethod
+    def _response_headings(language: str) -> tuple[str, str, str]:
+        if language == "my":
+            return ("🎯 အကျဉ်းချုပ်", "📖 အသေးစိတ်", "✅ ဆက်လက်လုပ်ဆောင်ရန်")
+        if language == "en":
+            return ("🎯 Executive Summary", "📖 Details", "✅ Next Steps")
+        return ("🎯 Executive Summary", "📖 รายละเอียด", "✅ สิ่งที่ควรทำต่อ")
+
     @staticmethod
     def _workplan_answer(
         profile: MemberProfile | None,
         activity_context: MemberActivityContext,
+        language: str = "th",
     ) -> CoachAnswer:
         first_name = profile.name.split()[0] if profile and profile.name else "สมาชิก"
+        summary_heading, detail_heading, action_heading = LocalCoachService._response_headings(language)
         return CoachAnswer(
-            "**สรุปคำตอบ**\n"
+            f"{summary_heading}\n"
             f"คุณ{first_name} ระบบพบข้อมูล Workplan และความคืบหน้าแผน 30 วันของคุณแล้ว\n\n"
-            "**ประเด็นสำคัญ**\n"
+            f"{detail_heading}\n"
             f"{activity_context.summary}\n\n"
-            "**แนวทางนำไปใช้**\n"
+            f"{action_heading}\n"
             "- เริ่มติดตามตามลำดับแนะนำในข้อมูล CRM โดยให้ความสำคัญกับรายชื่อเกรด A/B ที่ครบกำหนดก่อน\n"
             "- เปรียบเทียบผลงานจริงกับเป้าหมายประจำสัปดาห์ แล้วกำหนดกิจกรรมชดเชยที่ทำได้จริง\n"
             "- ทำภารกิจในแผน 30 วันต่อเนื่องเพื่อเพิ่มคะแนน PP และรักษาวินัย"
@@ -251,21 +267,26 @@ class LocalCoachService:
         return cleaned.strip(" -|•")
 
     @staticmethod
-    def _append_source_section(answer: str, sources: Sequence[str]) -> str:
+    def _append_source_section(answer: str, sources: Sequence[str], language: str = "th") -> str:
         if sources:
             source_lines = "\n".join(f"- {source}" for source in dict.fromkeys(sources))
         else:
-            source_lines = "- ไม่พบเอกสารในคลังความรู้ที่เกี่ยวข้องเพียงพอ"
-        return f"{answer.rstrip()}\n\n---\n**แหล่งข้อมูลอ้างอิง**\n{source_lines}"
+            source_lines = f"- {translate('Reference Missing', language)}"
+        return f"{answer.rstrip()}\n\n---\n**{translate('Reference Heading', language)}**\n{source_lines}"
 
     @staticmethod
-    def _not_found_answer() -> CoachAnswer:
-        message = (
-            "ฐานความรู้ยังไม่มีข้อมูลเพียงพอสำหรับตอบคำถามนี้ กรุณาลองระบุหัวข้อให้ชัดขึ้น เช่น "
-            "5 โมดูล, แผนงาน MLM, LINE OA, TikTok, Canva, Blogger, Facebook Page, Google Form "
-            "หรือการเล่าเรื่องผลิตภัณฑ์สุขภาพ"
-        )
-        return CoachAnswer(LocalCoachService._append_source_section(message, ()))
+    def _not_found_answer(language: str = "th") -> CoachAnswer:
+        if language == "my":
+            message = "ဤမေးခွန်းကို ယုံကြည်စိတ်ချရစွာ ဖြေဆိုရန် စနစ်၏ အသိပညာအချက်အလက် မလုံလောက်သေးပါ။ ကျေးဇူးပြု၍ မေးခွန်းကို ပိုမိုရှင်းလင်းစွာ ပြန်လည်ရေးသားပါ။"
+        elif language == "en":
+            message = "The knowledge base does not yet have enough information to answer this question reliably. Please ask with a more specific topic."
+        else:
+            message = (
+                "ฐานความรู้ยังไม่มีข้อมูลเพียงพอสำหรับตอบคำถามนี้ กรุณาลองระบุหัวข้อให้ชัดขึ้น เช่น "
+                "5 โมดูล, แผนงาน MLM, LINE OA, TikTok, Canva, Blogger, Facebook Page, Google Form "
+                "หรือการเล่าเรื่องผลิตภัณฑ์สุขภาพ"
+            )
+        return CoachAnswer(LocalCoachService._append_source_section(message, (), language))
 
     @staticmethod
     def _daily_tasks(

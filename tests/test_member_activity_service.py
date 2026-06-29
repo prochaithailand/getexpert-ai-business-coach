@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from models import ActionItem, MemberProfile
 from services.coach_service import LocalCoachService
 from services.member_activity_service import NO_WORKPLAN_MESSAGE, build_member_activity_context
+from services.openai_coach_service import OpenAICoachService
 from services.progress_service import member_progress_key
 from services.workplan_service import add_contact, create_default_workplan, replace_weekly_goals
 
@@ -99,8 +100,10 @@ class MemberActivityServiceTests(unittest.TestCase):
             "There is no saved Workplan data in the system yet. Please add your information in the Business Workplan menu first.",
         )
 
-    def test_local_coach_empty_workplan_answer_uses_question_language(self) -> None:
-        answer = LocalCoachService().answer_question("Workplan လုပ်ငန်းအစီအစဉ် ရှိလား", self.profile).answer
+    def test_tglife_coach_empty_workplan_answer_uses_question_language(self) -> None:
+        service = OpenAICoachService(None, client=object(), brand={"key": "tglife"})
+
+        answer = service.answer_question("Workplan လုပ်ငန်းအစီအစဉ် ရှိလား", self.profile).answer
 
         self.assertIn("စနစ်ထဲတွင်", answer)
         self.assertNotIn("ตอนนี้ยังไม่มีข้อมูล", answer)
