@@ -34,7 +34,8 @@ def render_team_dashboard(
     coach: CoachService,
     authenticated_user: AppUser | None = None,
 ) -> None:
-    st.title("Team Dashboard")
+    brand = st.session_state.get("_active_brand", {})
+    st.title("TG Life Team Dashboard" if brand.get("key") == "tglife" else "Team Dashboard")
     if not can_access_team_dashboard(authenticated_user or profile):
         st.warning(UNAUTHORIZED_MESSAGE)
         return

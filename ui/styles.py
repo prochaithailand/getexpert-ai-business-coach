@@ -105,6 +105,14 @@ def apply_global_styles() -> None:
         }
         .brand-name { font-weight: 750; line-height: 1.2; }
         .brand-tagline { font-size: 0.75rem; opacity: 1; padding-top: 0.2rem; }
+        .brand-powered {
+          color: #DCE9F7 !important;
+          font-size: 0.68rem;
+          font-weight: 700;
+          letter-spacing: .04em;
+          padding-top: .12rem;
+          text-transform: uppercase;
+        }
         .sidebar-spacer { height: 1.2rem; }
         [data-testid="stSidebar"] [role="radiogroup"] { gap: 0.35rem; }
         [data-testid="stSidebar"] [role="radiogroup"] label {
@@ -112,11 +120,25 @@ def apply_global_styles() -> None:
           border: 1px solid transparent;
           border-radius: 10px;
           padding: 0.55rem 0.7rem;
+          white-space: normal;
+          min-height: 2.8rem;
         }
         [data-testid="stSidebar"] [role="radiogroup"] label p,
         [data-testid="stSidebar"] [role="radiogroup"] label span {
           color: var(--white) !important;
           font-weight: 650;
+          white-space: normal !important;
+          overflow-wrap: anywhere;
+          line-height: 1.25;
+        }
+        [data-testid="stSidebar"] [data-baseweb="select"] * {
+          white-space: normal !important;
+          overflow-wrap: anywhere;
+        }
+        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] * {
+          color: var(--white) !important;
+          font-weight: 750;
+          white-space: normal !important;
         }
         [data-testid="stSidebar"] [role="radiogroup"] label:hover {
           background: #163F70;
@@ -155,6 +177,7 @@ def apply_global_styles() -> None:
         }
         .hero-kicker { color: #DCE9F7; font-size: .8rem; letter-spacing: .12em; font-weight: 750; }
         .hero h1 { color: var(--white) !important; margin: .55rem 0 .3rem; font-size: clamp(2.2rem, 5vw, 4.2rem); max-width: 800px; }
+        .hero-powered { color: #DCE9F7; font-weight: 800; margin-bottom: .7rem; letter-spacing: .08em; text-transform: uppercase; }
         .hero p { color: var(--white) !important; font-size: 1.15rem; max-width: 700px; }
         .section-lead { color: var(--text-muted) !important; margin-top: -.45rem; margin-bottom: 1.8rem; }
         .feature-card, .metric-card {
@@ -231,6 +254,7 @@ def apply_global_styles() -> None:
         .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] button {
           background: var(--white); color: var(--navy) !important; border: 2px solid var(--blue);
           border-radius: 10px; font-weight: 750; min-height: 2.65rem;
+          white-space: normal; overflow-wrap: anywhere; line-height: 1.25;
         }
         .stButton > button *, .stDownloadButton > button *,
         [data-testid="stFormSubmitButton"] button * { color: inherit !important; }
