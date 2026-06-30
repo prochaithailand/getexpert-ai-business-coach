@@ -145,28 +145,32 @@ def render_home(profile: MemberProfile | None) -> None:
     powered_by = brand.get("powered_by", "")
     _render_getting_started(profile)
     st.write("")
-    greeting = f"ยินดีต้อนรับกลับมา คุณ{profile.name.split()[0]}" if profile and profile.name else "วางเป้าหมายให้ชัดเจน และเติบโตอย่างมั่นใจ"
+    greeting = (
+        _t("Home Welcome Back", name=profile.name.split()[0])
+        if profile and profile.name
+        else _t("Home Default Greeting")
+    )
     powered_html = f"<div class='hero-powered'>{powered_by}</div>" if powered_by else ""
     st.markdown(
         f"""
         <section class="hero">
-            <div class="hero-kicker">ระบบ AI เพื่อความสำเร็จของสมาชิก</div>
+            <div class="hero-kicker">{_t("Home Hero Kicker")}</div>
             <h1>{hero_title}</h1>
             {powered_html}
-            <p>{greeting} เปลี่ยนเป้าหมายให้เป็นแผนลงมือทำที่สม่ำเสมอ สร้างคอนเทนต์ที่มีคุณภาพ และพัฒนาการสื่อสารทางธุรกิจอย่างมืออาชีพ</p>
+            <p>{greeting} {_t("Home Hero Description")}</p>
         </section>
         """,
         unsafe_allow_html=True,
     )
     st.write("")
-    st.subheader(f"พื้นที่พัฒนาธุรกิจของคุณบน {short_name}")
+    st.subheader(_t("Home Business Area Title", short_name=short_name))
     cols = st.columns(5)
     cards = (
-        ("01", "โปรไฟล์สมาชิก", "กำหนดเป้าหมาย ประสบการณ์ และเวลาที่พร้อมลงมือทำ"),
-        ("02", "แผน 30 วัน", "ดำเนินกิจกรรมพัฒนาธุรกิจอย่างเป็นขั้นตอนในแต่ละวัน"),
-        ("03", "สร้างคอนเทนต์", "จัดทำข้อความพร้อมใช้สำหรับช่องทางสื่อสารสำคัญ"),
-        ("04", "คลังความรู้", "ค้นหาและเปิดคู่มือพัฒนาธุรกิจของบริษัท"),
-        ("05", "โค้ช AI", "รับคำแนะนำจากข้อมูลในคลังความรู้ของระบบ"),
+        ("01", _t("Home Feature Profile Title"), _t("Home Feature Profile Description")),
+        ("02", _t("Home Feature Plan Title"), _t("Home Feature Plan Description")),
+        ("03", _t("Home Feature Content Title"), _t("Home Feature Content Description")),
+        ("04", _t("Home Feature Knowledge Title"), _t("Home Feature Knowledge Description")),
+        ("05", _t("Home Feature AI Title"), _t("Home Feature AI Description")),
     )
     for col, (number, title, copy) in zip(cols, cards):
         col.markdown(
@@ -192,7 +196,12 @@ def render_member_profile(repository: ProfileRepository) -> None:
         occupation = left.text_input(_t("Occupation"), value=current.occupation, placeholder=_t("Occupation Placeholder"))
         daily_time = right.number_input(_t("Daily Available Time"), min_value=0.25, max_value=12.0, value=current.daily_available_time, step=0.25)
         income_goal = left.number_input(_t("Monthly Income Goal"), min_value=0.0, value=current.income_goal, step=1000.0)
-        experience = right.selectbox(_t("Online Marketing Experience"), EXPERIENCE_LEVELS, index=experience_index)
+        experience = right.selectbox(
+            _t("Online Marketing Experience"),
+            EXPERIENCE_LEVELS,
+            index=experience_index,
+            format_func=lambda option: _t(str(option)),
+        )
         sponsor = left.text_input(
             _t("Sponsor"),
             value=current.sponsor,
@@ -200,21 +209,21 @@ def render_member_profile(repository: ProfileRepository) -> None:
             help=_t("Sponsor Help"),
         )
         if authenticated_role in {"Leader", "Partner"}:
-            st.markdown("**ข้อมูลทีมที่ได้รับมอบหมาย**")
-            left.text_input("ชื่อทีม", value=current.team_name or "ยังไม่ได้รับมอบหมาย", disabled=True)
-            right.text_input("รหัสทีม", value=current.team_id or "ยังไม่ได้รับมอบหมาย", disabled=True)
-            left.text_input("หัวหน้าทีม", value=current.team_leader or "ยังไม่ได้รับมอบหมาย", disabled=True)
+            st.markdown(f"**{_t('Assigned Team Info')}**")
+            left.text_input(_t("Team Name"), value=current.team_name or _t("Not Assigned"), disabled=True)
+            right.text_input(_t("Team ID"), value=current.team_id or _t("Not Assigned"), disabled=True)
+            left.text_input(_t("Team Leader"), value=current.team_leader or _t("Not Assigned"), disabled=True)
             right.text_input(
-                "บทบาทในทีม",
-                value="Partner" if authenticated_role == "Partner" else "ผู้นำ",
+                _t("Team Role"),
+                value="Partner" if authenticated_role == "Partner" else _t("Leader Role Label"),
                 disabled=True,
             )
             if authenticated_role == "Partner":
-                st.caption("Referral Partner ที่ได้รับอนุมัติ | Referral Rate 15%")
-            st.caption("ข้อมูลทีมกำหนดโดยผู้ดูแลระบบและไม่สามารถแก้ไขจากหน้าโปรไฟล์ได้")
+                st.caption(_t("Partner Referral Caption"))
+            st.caption(_t("Team Info Locked Caption"))
         elif authenticated_role == "Admin":
-            st.markdown("**การจัดการทีม**")
-            st.info("กำหนดหัวหน้าทีมและสมาชิกได้จากเมนูจัดการทีม")
+            st.markdown(f"**{_t('Team Management Section')}**")
+            st.info(_t("Team Management Info"))
         submitted = st.form_submit_button(_t("Save Member Profile"), type="primary", width="stretch")
     if submitted:
         profile = MemberProfile(

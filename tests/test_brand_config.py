@@ -54,8 +54,47 @@ class BrandConfigTests(unittest.TestCase):
         self.assertEqual(translate("Reference Heading", "my"), "ကိုးကားအချက်အလက်များ")
         self.assertIn("မလုံလောက်သေးပါ", translate("Reference Missing", "my"))
 
+    def test_myanmar_home_and_profile_translations_are_available(self) -> None:
+        expectations = {
+            "Home Welcome Back": "ပြန်လည်ကြိုဆိုပါသည်",
+            "Home Hero Kicker": "အသင်းဝင်အောင်မြင်မှု",
+            "Home Business Area Title": "စီးပွားရေးဖွံ့ဖြိုးရေး",
+            "Home Feature Profile Title": "အဖွဲ့ဝင် ပရိုဖိုင်",
+            "Home Feature Plan Title": "ရက် ၃၀ အစီအစဉ်",
+            "Home Feature Content Title": "ကွန်တင့် ဖန်တီးခြင်း",
+            "Home Feature Knowledge Title": "ဗဟုသုတဘဏ်",
+            "Home Feature AI Title": "AI နည်းပြ",
+            "ยังไม่มีประสบการณ์": "အတွေ့အကြုံ မရှိသေးပါ",
+            "ระดับเริ่มต้น (น้อยกว่า 1 ปี)": "စတင်သူအဆင့်",
+            "ระดับกลาง (1-3 ปี)": "အလယ်အလတ်အဆင့်",
+            "ระดับเชี่ยวชาญ (มากกว่า 3 ปี)": "ကျွမ်းကျင်အဆင့်",
+        }
+        for key, expected in expectations.items():
+            with self.subTest(key=key):
+                translated = translate(key, "my")
+                self.assertIn(expected, translated)
+                self.assertNotEqual(translated, translate(key, "th"))
+
     def test_core_page_translation_keys_are_available_for_launch_languages(self) -> None:
         required_keys = (
+            "Home Welcome Back",
+            "Home Hero Kicker",
+            "Home Hero Description",
+            "Home Feature Profile Title",
+            "Home Feature Profile Description",
+            "Home Feature Plan Title",
+            "Home Feature Content Title",
+            "Home Feature Knowledge Title",
+            "Home Feature AI Title",
+            "ยังไม่มีประสบการณ์",
+            "ระดับเริ่มต้น (น้อยกว่า 1 ปี)",
+            "ระดับกลาง (1-3 ปี)",
+            "ระดับเชี่ยวชาญ (มากกว่า 3 ปี)",
+            "Assigned Team Info",
+            "Team Name",
+            "Team ID",
+            "Team Leader",
+            "Not Assigned",
             "30-Day Plan Page Title",
             "30-Day Plan Page Description",
             "Action Plan Daily Time",
