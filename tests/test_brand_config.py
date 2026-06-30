@@ -110,7 +110,83 @@ class BrandConfigTests(unittest.TestCase):
             "Workplan Page Description",
             "Prospect Page Description",
             "Dashboard Page Description",
+            "Member Dashboard Title",
+            "Dashboard Insufficient Data",
             "AI Coach Semantic Ready",
+        )
+        for language in ("th", "my", "en"):
+            with self.subTest(language=language):
+                for key in required_keys:
+                    self.assertIn(key, TRANSLATIONS[language])
+                    self.assertTrue(translate(key, language).strip())
+
+    def test_myanmar_phase_two_ui_translations_are_available(self) -> None:
+        expectations = {
+            "Member Dashboard Title": "အသင်းဝင် ဒက်ရှ်ဘုတ်",
+            "Dashboard Insufficient Data": "အချက်အလက် မလုံလောက်",
+            "โพสต์ Facebook": "Facebook ပို့စ်",
+            "สร้างการรับรู้": "အသိအမြင်",
+            "เพิ่มผู้สนใจใหม่": "စိတ်ဝင်စားသူအသစ်",
+            "เชิญเข้าร่วมกิจกรรม": "ဖိတ်ခေါ်",
+            "ติดตามลูกค้า": "Follow-up",
+            "พัฒนาทีม": "အသင်းအဖွဲ့",
+            "ยังไม่ติดต่อ": "မဆက်သွယ်ရသေးပါ",
+            "ติดต่อแล้ว": "ဆက်သွယ်ပြီး",
+            "ส่งข้อมูลแล้ว": "အချက်အလက်ပို့ပြီး",
+            "นัดหมายแล้ว": "ချိန်းဆိုပြီး",
+            "นำเสนอแล้ว": "တင်ပြပြီး",
+            "กำลังตัดสินใจ": "ဆုံးဖြတ်နေဆဲ",
+            "สมัครแล้ว": "စာရင်းသွင်းပြီး",
+            "Account Settings Description": "လုံခြုံရေး",
+            "Membership Status": "အသင်းဝင် အခြေအနေ",
+            "Free Trial": "အခမဲ့",
+            "Change Password": "စကားဝှက်",
+            "Save New Password": "စကားဝှက်အသစ်",
+        }
+        for key, expected in expectations.items():
+            with self.subTest(key=key):
+                translated = translate(key, "my")
+                self.assertIn(expected, translated)
+                self.assertNotEqual(translated, translate(key, "th"))
+
+    def test_phase_two_translation_keys_exist_for_all_launch_languages(self) -> None:
+        required_keys = (
+            "Member Dashboard Title",
+            "Dashboard Insufficient Data",
+            "โพสต์ Facebook",
+            "สคริปต์ TikTok",
+            "ข้อความบรอดแคสต์ LINE OA",
+            "สร้างการรับรู้",
+            "เพิ่มผู้สนใจใหม่",
+            "เชิญเข้าร่วมกิจกรรม",
+            "ติดตามลูกค้า",
+            "พัฒนาทีม",
+            "ยังไม่ติดต่อ",
+            "ติดต่อแล้ว",
+            "ส่งข้อมูลแล้ว",
+            "นัดหมายแล้ว",
+            "นำเสนอแล้ว",
+            "กำลังตัดสินใจ",
+            "สมัครแล้ว",
+            "ไม่สนใจ",
+            "นัดหมาย",
+            "ปฏิเสธ",
+            "Account Settings Description",
+            "Login Required For Password",
+            "Membership Status",
+            "Membership Status Line",
+            "Active Subscription",
+            "Free Trial",
+            "Pending Payment",
+            "Expired Subscription",
+            "Suspended Subscription",
+            "Trial Expiry Date",
+            "Trial Days Remaining",
+            "Change Password",
+            "New Password",
+            "Confirm New Password",
+            "Save New Password",
+            "Password Changed Success",
         )
         for language in ("th", "my", "en"):
             with self.subTest(language=language):

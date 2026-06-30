@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 
@@ -202,47 +202,47 @@ def render_logout(store: SessionUserStore, user: AppUser) -> None:
 
 
 def render_account_settings(store: SessionUserStore, user: AppUser | None) -> None:
-    st.title("ตั้งค่าบัญชี")
+    st.title(_t("Account Settings"))
     if user is None:
-        st.warning("กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน")
+        st.warning(_t("Login Required For Password"))
         return
     user = normalize_subscription_user(user)
     st.markdown(
-        "<p class='section-lead'>จัดการความปลอดภัยสำหรับบัญชีของคุณ</p>",
+        f"<p class='section-lead'>{_t('Account Settings Description')}</p>",
         unsafe_allow_html=True,
     )
     status = effective_subscription_status(user)
     status_label = {
-        "active": "ใช้งานอยู่",
-        "trialing": "ทดลองใช้ฟรี",
-        "pending_payment": "รอชำระเงิน / รออนุมัติ",
-        "expired": "หมดอายุ",
-        "suspended": "ถูกระงับ",
+        "active": _t("Active Subscription"),
+        "trialing": _t("Free Trial"),
+        "pending_payment": _t("Pending Payment"),
+        "expired": _t("Expired Subscription"),
+        "suspended": _t("Suspended Subscription"),
     }.get(status, status)
-    st.subheader("สถานะสมาชิก")
-    st.write(f"สถานะสมาชิก: **{status_label}**")
+    st.subheader(_t("Membership Status"))
+    st.write(_t("Membership Status Line", status=status_label))
     if user.subscription_expires_at:
-        st.write(f"ใช้งานได้ถึง: **{user.subscription_expires_at[:10]}**")
+        st.write(_t("Subscription Valid Until", date=user.subscription_expires_at[:10]))
     if user.trial_ends_at:
         if status == "trialing":
-            st.write(f"วันหมดอายุทดลองใช้ฟรี: **{user.trial_ends_at[:10]}**")
-            st.write(f"เหลือเวลาทดลองใช้ฟรี: **{trial_days_remaining(user)} วัน**")
+            st.write(_t("Trial Expiry Date", date=user.trial_ends_at[:10]))
+            st.write(_t("Trial Days Remaining", days=trial_days_remaining(user)))
         elif user.trial_used and status == "expired" and not user.subscription_expires_at:
-            st.warning("สิทธิ์ทดลองใช้ฟรีหมดอายุแล้ว กรุณาชำระเงินเพื่อใช้งานระบบต่อ")
-    st.subheader("เปลี่ยนรหัสผ่าน")
-    st.caption(f"บัญชี: {user.email}")
+            st.warning(_t("Trial Expired Warning"))
+    st.subheader(_t("Change Password"))
+    st.caption(_t("Account Email", email=user.email))
     with st.form("change_password_form", clear_on_submit=True):
         new_password = st.text_input(
-            "รหัสผ่านใหม่",
+            _t("New Password"),
             type="password",
-            help="รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
+            help=_t("New Password Help"),
         )
         confirm_password = st.text_input(
-            "ยืนยันรหัสผ่านใหม่",
+            _t("Confirm New Password"),
             type="password",
         )
         submitted = st.form_submit_button(
-            "บันทึกรหัสผ่านใหม่",
+            _t("Save New Password"),
             type="primary",
             width="stretch",
         )
@@ -253,7 +253,9 @@ def render_account_settings(store: SessionUserStore, user: AppUser | None) -> No
     except (PermissionError, RuntimeError, ValueError) as error:
         st.error(str(error))
         return
-    st.success("เปลี่ยนรหัสผ่านเรียบร้อยแล้ว")
+    st.success(_t("Password Changed Success"))
+    return
+
 
 
 def render_user_management(store: SessionUserStore, user: AppUser) -> None:

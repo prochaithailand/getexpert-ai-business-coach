@@ -419,8 +419,18 @@ def render_content_creator(profile: MemberProfile | None, coach: CoachService) -
     platforms = ("โพสต์ Facebook", "สคริปต์ TikTok", "ข้อความบรอดแคสต์ LINE OA")
     goals = ("สร้างการรับรู้", "เพิ่มผู้สนใจใหม่", "เชิญเข้าร่วมกิจกรรม", "ติดตามลูกค้า", "พัฒนาทีม")
     first, second = st.columns(2)
-    platform = first.selectbox(_t("Platform"), platforms, key="content_platform")
-    goal = second.selectbox(_t("Content Goal"), goals, key="content_goal")
+    platform = first.selectbox(
+        _t("Platform"),
+        platforms,
+        key="content_platform",
+        format_func=lambda option: _t(str(option)),
+    )
+    goal = second.selectbox(
+        _t("Content Goal"),
+        goals,
+        key="content_goal",
+        format_func=lambda option: _t(str(option)),
+    )
     topic = st.text_input(
         _t("Content Topic"),
         value="การเริ่มต้นธุรกิจเครือข่าย",
@@ -451,7 +461,7 @@ def render_content_creator(profile: MemberProfile | None, coach: CoachService) -
         else None
     )
     if content:
-        st.subheader(platform)
+        st.subheader(_t(platform))
         content_key = f"content_{abs(hash(input_signature))}"
         st.text_area(_t("Generated Content Draft"), value=content, height=330, key=content_key)
         st.caption(_t("Content Review Warning"))

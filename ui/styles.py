@@ -163,6 +163,14 @@ def apply_global_styles() -> None:
         [data-testid="stSidebarCollapseButton"] button * { color: var(--white) !important; fill: var(--white) !important; }
         [data-testid="stSidebarCollapsedControl"] button,
         [data-testid="stSidebarCollapsedControl"] button * { color: var(--navy) !important; fill: var(--navy) !important; }
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+          background: var(--white) !important;
+          color: var(--navy) !important;
+          border-color: #C8D7E8 !important;
+        }
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"] * {
+          color: var(--navy) !important;
+        }
 
         /* Hero and cards */
         .hero {

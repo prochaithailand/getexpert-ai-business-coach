@@ -9,7 +9,6 @@ import streamlit as st
 from models import MemberProfile
 from services.coach_service import CoachService, LocalCoachService
 from services.dashboard_service import (
-    EMPTY_DASHBOARD_MESSAGE,
     build_and_save_dashboard,
     dashboard_context,
     dashboard_signature,
@@ -35,7 +34,7 @@ def _t(key: str, **values: object) -> str:
 
 def render_member_dashboard(profile: MemberProfile | None, coach: CoachService) -> None:
     brand = st.session_state.get("_active_brand", {})
-    title = "TG Life Member Dashboard" if brand.get("key") == "tglife" else _t("Dashboard")
+    title = _t("Member Dashboard Title", short_name=brand.get("short_name", "GetExpert"))
     st.title(title)
     st.markdown(
         f"<p class='section-lead'>{_t('Dashboard Page Description')}</p>",
@@ -43,7 +42,7 @@ def render_member_dashboard(profile: MemberProfile | None, coach: CoachService) 
     )
     snapshot = build_and_save_dashboard(st.session_state, profile)
     if snapshot is None:
-        st.info(EMPTY_DASHBOARD_MESSAGE)
+        st.info(_t("Dashboard Insufficient Data"))
         return
 
     _render_cards(snapshot)

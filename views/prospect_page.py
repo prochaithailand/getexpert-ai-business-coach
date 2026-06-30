@@ -31,6 +31,10 @@ def _t(key: str, **values: object) -> str:
     return text.format(**values) if values else text
 
 
+def _option_label(option: object) -> str:
+    return _t(str(option))
+
+
 AI_DRAFT_KEY = "prospect_ai_draft"
 AI_INPUT_KEY = "prospect_ai_input"
 PROSPECT_SEARCH_FIELDS = (
@@ -155,9 +159,10 @@ def _render_ai_add_form(
             _t("Status"),
             CONTACT_STATUSES,
             index=CONTACT_STATUSES.index(status_value) if status_value in CONTACT_STATUSES else 0,
+            format_func=_option_label,
         )
         category = second.selectbox(
-            "เกรด A/B/C/D",
+            _t("Grade Label"),
             CONTACT_TYPES,
             index=CONTACT_TYPES.index(category_value) if category_value in CONTACT_TYPES else 3,
         )
@@ -180,7 +185,7 @@ def _render_ai_add_form(
     if not confirmed:
         return
     if not _can_use_ai_prospect_entry(authenticated_user):
-        st.error("บัญชีของคุณยังไม่พร้อมใช้งานฟีเจอร์นี้")
+        st.error(_t("AI Prospect Active Only"))
         return
     if not name.strip():
         st.warning(_t("Prospect Name Required"))
@@ -234,8 +239,8 @@ def _render_add_form(
         occupation = fourth.text_input(_t("Occupation"), placeholder=_t("Occupation Placeholder"))
         income = first.number_input(_t("Monthly Income"), min_value=0.0, step=1000.0)
         province = second.text_input(_t("Province"), placeholder=_t("Province Placeholder"))
-        category = third.selectbox("เกรด A/B/C/D", CONTACT_TYPES)
-        status = fourth.selectbox(_t("Status"), CONTACT_STATUSES)
+        category = third.selectbox(_t("Grade Label"), CONTACT_TYPES)
+        status = fourth.selectbox(_t("Status"), CONTACT_STATUSES, format_func=_option_label)
         notes = st.text_area(_t("Notes"), placeholder=_t("Notes Placeholder"))
         follow_up = st.date_input(
             _t("Next Follow Up Date"),
@@ -273,10 +278,10 @@ def _render_priority_preview(contacts: list[dict[str, Any]]) -> None:
         return
     st.subheader(_t("Follow Up Priority"))
     for index, prospect in enumerate(priorities, start=1):
-        follow_up = prospect["next_follow_up"] or "ยังไม่กำหนดวัน"
+        follow_up = prospect["next_follow_up"] or _t("No Follow Up Date")
         st.markdown(
-            f"**{index}. {prospect['name']}** - เกรด {prospect['category']} | "
-            f"{prospect['status']} | ติดตาม: {follow_up}"
+            f"**{index}. {prospect['name']}** - {_t('Grade Label')} {prospect['category']} | "
+            f"{_t(str(prospect['status']))} | {_t('Follow Up Date')}: {follow_up}"
         )
 
 
@@ -299,11 +304,13 @@ def _render_prospect_table(
         _t("Filter By Grade"),
         ("ทั้งหมด", *CONTACT_TYPES),
         key="prospect_grade_filter",
+        format_func=_option_label,
     )
     status_filter = filter_right.selectbox(
         _t("Filter By Status"),
         tuple(PROSPECT_STATUS_FILTERS),
         key="prospect_status_filter",
+        format_func=_option_label,
     )
     prospects = filter_prospects(
         workplan["contacts"],
@@ -321,7 +328,17 @@ def _render_prospect_table(
     header = st.columns([1.9, 0.95, 0.55, 1.15, 1.15, 1.45, 1.05, 0.65, 0.5])
     for column, label in zip(
         header,
-        ("ชื่อ / เบอร์โทร", "จังหวัด", "เกรด", "สถานะปัจจุบัน", "วันติดตาม", "สถานะใหม่", "อัปเดตสถานะ", "แก้ไข", "ลบ"),
+        (
+            _t("Table Name Phone"),
+            _t("Province"),
+            _t("Grade Label"),
+            _t("Current Status"),
+            _t("Follow Up Date"),
+            _t("New Status"),
+            _t("Update Status"),
+            _t("Edit"),
+            _t("Delete"),
+        ),
     ):
         column.markdown(f"**{label}**")
 
@@ -329,29 +346,30 @@ def _render_prospect_table(
         with st.container(border=True):
             columns = st.columns([1.9, 0.95, 0.55, 1.15, 1.15, 1.45, 1.05, 0.65, 0.5])
             columns[0].markdown(
-                f"**{prospect['name']}**<br><small>{prospect['phone'] or 'ไม่ระบุเบอร์โทร'}</small>",
+                f"**{prospect['name']}**<br><small>{prospect['phone'] or _t('No Phone Specified')}</small>",
                 unsafe_allow_html=True,
             )
-            columns[1].write(prospect.get("province") or "ไม่ระบุ")
+            columns[1].write(prospect.get("province") or _t("Not Specified Short"))
             columns[2].write(prospect["category"])
-            columns[3].write(prospect["status"])
-            columns[4].write(prospect.get("next_follow_up") or "ยังไม่กำหนด")
+            columns[3].write(_t(str(prospect["status"])))
+            columns[4].write(prospect.get("next_follow_up") or _t("No Follow Up Date"))
             new_status = columns[5].selectbox(
-                f"สถานะใหม่ของ {prospect['name']}",
+                _t("Prospect New Status Label", name=prospect["name"]),
                 CONTACT_STATUSES,
                 index=CONTACT_STATUSES.index(prospect["status"]),
                 key=f"quick_status_{prospect['id']}",
                 label_visibility="collapsed",
+                format_func=_option_label,
             )
-            if columns[6].button("อัปเดตสถานะ", key=f"update_status_{prospect['id']}", width="stretch"):
+            if columns[6].button(_t("Update Status"), key=f"update_status_{prospect['id']}", width="stretch"):
                 updated = update_contact_status(workplan, prospect["id"], new_status)
                 repository.save(profile, updated)
-                st.session_state.prospect_flash_message = f"อัปเดตสถานะของ {prospect['name']} เรียบร้อยแล้ว"
+                st.session_state.prospect_flash_message = _t("Prospect Status Updated", name=prospect["name"])
                 st.rerun()
-            if columns[7].button("แก้ไข", key=f"edit_prospect_{prospect['id']}", width="stretch"):
+            if columns[7].button(_t("Edit"), key=f"edit_prospect_{prospect['id']}", width="stretch"):
                 st.session_state.prospect_edit_id = prospect["id"]
                 st.session_state.pop("prospect_delete_id", None)
-            if columns[8].button("ลบ", key=f"delete_prospect_{prospect['id']}", width="stretch"):
+            if columns[8].button(_t("Delete"), key=f"delete_prospect_{prospect['id']}", width="stretch"):
                 st.session_state.prospect_delete_id = prospect["id"]
                 st.session_state.pop("prospect_edit_id", None)
 
@@ -401,51 +419,52 @@ def _render_edit_form(
     prospect = next((item for item in workplan["contacts"] if item["id"] == contact_id), None)
     if prospect is None:
         return
-    st.subheader(f"แก้ไขผู้มุ่งหวัง: {prospect['name']}")
+    st.subheader(_t("Edit Prospect Title", name=prospect["name"]))
     with st.form(f"prospect_edit_form_{contact_id}"):
         first, second, third, fourth = st.columns(4)
-        name = first.text_input("ชื่อ", value=prospect["name"], key=f"edit_name_{contact_id}")
-        phone = second.text_input("เบอร์โทร", value=prospect["phone"], key=f"edit_phone_{contact_id}")
+        name = first.text_input(_t("Name"), value=prospect["name"], key=f"edit_name_{contact_id}")
+        phone = second.text_input(_t("Phone"), value=prospect["phone"], key=f"edit_phone_{contact_id}")
         age = third.number_input(
-            "อายุ", min_value=0, max_value=120, value=int(prospect["age"]), key=f"edit_age_{contact_id}"
+            _t("Age"), min_value=0, max_value=120, value=int(prospect["age"]), key=f"edit_age_{contact_id}"
         )
         occupation = fourth.text_input(
-            "อาชีพ", value=prospect["occupation"], key=f"edit_occupation_{contact_id}"
+            _t("Occupation"), value=prospect["occupation"], key=f"edit_occupation_{contact_id}"
         )
         income = first.number_input(
-            "รายได้ต่อเดือน (บาท)", min_value=0.0, value=float(prospect["income"]),
+            _t("Edit Monthly Income"), min_value=0.0, value=float(prospect["income"]),
             step=1000.0, key=f"edit_income_{contact_id}",
         )
         province = second.text_input(
-            "จังหวัด", value=prospect.get("province", ""), key=f"edit_province_{contact_id}"
+            _t("Province"), value=prospect.get("province", ""), key=f"edit_province_{contact_id}"
         )
         category = third.selectbox(
-            "เกรด A/B/C/D", CONTACT_TYPES, index=CONTACT_TYPES.index(prospect["category"]),
+            _t("Grade Label"), CONTACT_TYPES, index=CONTACT_TYPES.index(prospect["category"]),
             key=f"edit_category_{contact_id}",
         )
         status = fourth.selectbox(
-            "สถานะ", CONTACT_STATUSES, index=CONTACT_STATUSES.index(prospect["status"]),
+            _t("Status"), CONTACT_STATUSES, index=CONTACT_STATUSES.index(prospect["status"]),
             key=f"edit_status_{contact_id}",
+            format_func=_option_label,
         )
         notes = st.text_area(
-            "หมายเหตุ", value=prospect.get("notes", ""), key=f"edit_notes_{contact_id}"
+            _t("Notes"), value=prospect.get("notes", ""), key=f"edit_notes_{contact_id}"
         )
         follow_up = st.date_input(
-            "วันที่ติดตามครั้งถัดไป",
+            _t("Next Follow Up Date"),
             value=_date_value(prospect.get("next_follow_up", "")),
             format="DD/MM/YYYY",
             key=f"edit_follow_up_{contact_id}",
         )
         save, cancel = st.columns(2)
-        submitted = save.form_submit_button("บันทึกการแก้ไข", type="primary", width="stretch")
-        cancelled = cancel.form_submit_button("ยกเลิก", width="stretch")
+        submitted = save.form_submit_button(_t("Save Edit"), type="primary", width="stretch")
+        cancelled = cancel.form_submit_button(_t("Cancel"), width="stretch")
     if cancelled:
         st.session_state.pop("prospect_edit_id", None)
         st.rerun()
     if not submitted:
         return
     if not name.strip():
-        st.warning("กรุณาระบุชื่อผู้มุ่งหวัง")
+        st.warning(_t("Prospect Name Required"))
         return
     updated = update_contact(
         workplan,
@@ -465,7 +484,7 @@ def _render_edit_form(
     )
     repository.save(profile, updated)
     st.session_state.pop("prospect_edit_id", None)
-    st.session_state.prospect_flash_message = f"บันทึกการแก้ไข {name} เรียบร้อยแล้ว"
+    st.session_state.prospect_flash_message = _t("Prospect Edit Saved", name=name)
     st.rerun()
 
 
@@ -478,15 +497,15 @@ def _render_delete_confirmation(
     prospect = next((item for item in workplan["contacts"] if item["id"] == contact_id), None)
     if prospect is None:
         return
-    st.warning(f"ยืนยันการลบผู้มุ่งหวัง {prospect['name']} ข้อมูลที่ลบแล้วไม่สามารถเรียกคืนได้")
+    st.warning(_t("Prospect Delete Confirm", name=prospect["name"]))
     confirm, cancel = st.columns(2)
-    if confirm.button("ยืนยันการลบ", type="primary", key=f"confirm_delete_{contact_id}", width="stretch"):
+    if confirm.button(_t("Confirm Delete"), type="primary", key=f"confirm_delete_{contact_id}", width="stretch"):
         updated = delete_contact(workplan, contact_id)
         repository.save(profile, updated)
         st.session_state.pop("prospect_delete_id", None)
-        st.session_state.prospect_flash_message = f"ลบผู้มุ่งหวัง {prospect['name']} เรียบร้อยแล้ว"
+        st.session_state.prospect_flash_message = _t("Prospect Deleted", name=prospect["name"])
         st.rerun()
-    if cancel.button("ยกเลิก", key=f"cancel_delete_{contact_id}", width="stretch"):
+    if cancel.button(_t("Cancel"), key=f"cancel_delete_{contact_id}", width="stretch"):
         st.session_state.pop("prospect_delete_id", None)
         st.rerun()
 
