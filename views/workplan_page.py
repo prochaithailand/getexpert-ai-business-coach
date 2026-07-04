@@ -12,6 +12,16 @@ from services.workplan_service import (
     replace_weekly_goals,
     weekly_rows_with_percentage,
 )
+from translations import translate
+
+
+def _language() -> str:
+    return str(st.session_state.get("language", "th"))
+
+
+def _t(key: str, **values: object) -> str:
+    text = translate(key, _language())
+    return text.format(**values) if values else text
 
 
 def _records(data: Any) -> list[dict[str, Any]]:
@@ -26,32 +36,32 @@ def _navigate_to_prospects() -> None:
 
 
 def render_business_workplan(profile: MemberProfile | None) -> None:
-    st.title("Workplan ธุรกิจ")
+    st.title(_t("Workplan"))
     st.markdown(
-        "<p class='section-lead'>กำหนดเป้าหมาย แผนงาน กิจกรรมรายสัปดาห์ และติดตามความคืบหน้าทางธุรกิจ</p>",
+        f"<p class='section-lead'>{_t('Workplan Page Description')}</p>",
         unsafe_allow_html=True,
     )
     if not profile or not profile.is_complete:
-        st.warning("กรุณากรอกโปรไฟล์สมาชิกก่อนเริ่มใช้งาน Workplan ธุรกิจ")
+        st.warning(_t("Workplan Profile Required"))
         return
 
     repository = SessionWorkplanRepository(st.session_state)
     workplan = repository.get(profile)
     _render_dashboard(workplan)
-    st.info("จัดการ เพิ่ม และติดตามรายชื่อทั้งหมดได้จากเมนูผู้มุ่งหวัง")
+    st.info(_t("Workplan Prospect Info"))
     st.button(
-        "ไปจัดการผู้มุ่งหวัง",
+        _t("Go To Prospects"),
         type="primary",
         on_click=_navigate_to_prospects,
         width="stretch",
     )
-    tabs = st.tabs(("เป้าหมายสปอนเซอร์", "เป้าหมายคะแนนทีม", "เป้าหมายรายได้"))
+    tabs = st.tabs((_t("Sponsor Goal"), _t("Team Points Goal"), _t("Income Goal")))
     with tabs[0]:
-        _render_weekly_goal(profile, repository, workplan, "sponsor", "เป้าหมายสปอนเซอร์", "คน")
+        _render_weekly_goal(profile, repository, workplan, "sponsor", _t("Sponsor Goal"), _t("People Unit"))
     with tabs[1]:
-        _render_weekly_goal(profile, repository, workplan, "team_points", "เป้าหมายคะแนนทีม", "คะแนน")
+        _render_weekly_goal(profile, repository, workplan, "team_points", _t("Team Points Goal"), _t("Points Unit"))
     with tabs[2]:
-        _render_weekly_goal(profile, repository, workplan, "income", "เป้าหมายรายได้", "บาท")
+        _render_weekly_goal(profile, repository, workplan, "income", _t("Income Goal"), _t("Currency Baht"))
 
 
 def _render_dashboard(workplan: dict[str, Any]) -> None:
@@ -59,9 +69,9 @@ def _render_dashboard(workplan: dict[str, Any]) -> None:
     points = goal_summary(workplan["goals"]["team_points"])
     income = goal_summary(workplan["goals"]["income"])
     cards = (
-        ("สปอนเซอร์สำเร็จ", f"{sponsor['percentage']:.0f}%"),
-        ("คะแนนทีมสำเร็จ", f"{points['percentage']:.0f}%"),
-        ("รายได้สำเร็จ", f"{income['percentage']:.0f}%"),
+        (_t("Sponsor Completion"), f"{sponsor['percentage']:.0f}%"),
+        (_t("Team Points Completion"), f"{points['percentage']:.0f}%"),
+        (_t("Income Completion"), f"{income['percentage']:.0f}%"),
     )
     columns = st.columns(3)
     for column, (label, value) in zip(columns, cards):
@@ -84,10 +94,10 @@ def _render_weekly_goal(
     rows = weekly_rows_with_percentage(workplan["goals"][goal_key])
     summary = goal_summary(rows)
     first, second, third = st.columns(3)
-    first.metric(f"เป้าหมายรวม ({unit})", f"{summary['target']:,.0f}")
-    second.metric(f"ทำได้จริง ({unit})", f"{summary['actual']:,.0f}")
-    third.metric("ความสำเร็จ", f"{summary['percentage']:.0f}%")
-    st.progress(summary["percentage"] / 100, text=f"ความสำเร็จรวม {summary['percentage']:.0f}%")
+    first.metric(f"{_t('Total Target')} ({unit})", f"{summary['target']:,.0f}")
+    second.metric(f"{_t('Actual Result')} ({unit})", f"{summary['actual']:,.0f}")
+    third.metric(_t("Completion"), f"{summary['percentage']:.0f}%")
+    st.progress(summary["percentage"] / 100, text=f"{_t('Total Completion')} {summary['percentage']:.0f}%")
 
     edited = st.data_editor(
         rows,
@@ -95,14 +105,14 @@ def _render_weekly_goal(
         hide_index=True,
         width="stretch",
         column_config={
-            "week": st.column_config.NumberColumn("สัปดาห์ที่", format="%d"),
-            "target": st.column_config.NumberColumn(f"เป้าหมาย ({unit})", min_value=0, step=1),
-            "actual": st.column_config.NumberColumn(f"ทำได้จริง ({unit})", min_value=0, step=1),
-            "percentage": st.column_config.ProgressColumn("ความสำเร็จ (%)", min_value=0, max_value=100, format="%.0f%%"),
+            "week": st.column_config.NumberColumn(_t("Week Number"), format="%d"),
+            "target": st.column_config.NumberColumn(f"{_t('Target')} ({unit})", min_value=0, step=1),
+            "actual": st.column_config.NumberColumn(f"{_t('Actual Result')} ({unit})", min_value=0, step=1),
+            "percentage": st.column_config.ProgressColumn(f"{_t('Completion')} (%)", min_value=0, max_value=100, format="%.0f%%"),
         },
         disabled=("week", "percentage"),
     )
-    if st.button(f"บันทึก{title}", key=f"save_{goal_key}", type="primary", width="stretch"):
+    if st.button(f"{_t('Save')} {title}", key=f"save_{goal_key}", type="primary", width="stretch"):
         updated = replace_weekly_goals(workplan, goal_key, _records(edited))
         repository.save(profile, updated)
         st.rerun()

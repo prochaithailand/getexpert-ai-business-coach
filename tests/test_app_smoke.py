@@ -233,7 +233,7 @@ class AppSmokeTests(unittest.TestCase):
             [*(item.value for item in app.markdown), *(item.value for item in app.subheader)]
         )
         for label in (
-            "ชื่อสมาชิก", "เป้าหมายรายได้", "คะแนน PP", "รายชื่อ A",
+            "ชื่อสมาชิก", "เป้าหมายรายได้", "คะแนน PP", "จำนวนรายชื่อทั้งหมด", "A",
             "เป้าหมายสปอนเซอร์", "เป้าหมายคะแนนทีม", "ผู้มุ่งหวังสมัครแล้ว",
             "ผู้มุ่งหวังนัดหมายแล้ว", "AI Insight",
             "ชื่อทีม", "ทีม Dashboard", "รหัสทีม", "TEAM-UI", "หัวหน้าทีม",

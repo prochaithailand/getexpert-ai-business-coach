@@ -12,12 +12,17 @@ from services.workplan_service import (
     priority_contacts,
     prospect_summary,
 )
+from translations import translate
 
 
 NO_WORKPLAN_MESSAGE = (
     "ตอนนี้ยังไม่มีข้อมูล Workplan ที่บันทึกไว้ในระบบ "
     "กรุณาเพิ่มข้อมูลในเมนู Workplan ธุรกิจก่อน"
 )
+
+
+def no_workplan_message(language: str | None = None) -> str:
+    return translate("No Workplan Data Message", language)
 
 
 @dataclass(frozen=True)
@@ -39,9 +44,14 @@ def is_workplan_question(message: str) -> bool:
     return any(term in normalized for term in terms)
 
 
-def build_member_activity_context(state: Any, profile: MemberProfile | None) -> MemberActivityContext:
+def build_member_activity_context(
+    state: Any,
+    profile: MemberProfile | None,
+    language: str | None = None,
+) -> MemberActivityContext:
+    empty_message = no_workplan_message(language)
     if not profile or not profile.is_complete:
-        return MemberActivityContext(False, NO_WORKPLAN_MESSAGE)
+        return MemberActivityContext(False, empty_message)
 
     member_key = member_progress_key(profile)
     workplan = state.get("workplan_by_member", {}).get(member_key)
@@ -76,7 +86,7 @@ def build_member_activity_context(state: Any, profile: MemberProfile | None) -> 
         )
     )
     if not has_workplan_values and not has_action_plan and progress.completed_days == 0:
-        return MemberActivityContext(False, NO_WORKPLAN_MESSAGE)
+        return MemberActivityContext(False, empty_message)
 
     workplan = workplan or {"contacts": [], "goals": {}}
     contacts = [normalize_contact(contact) for contact in workplan.get("contacts", [])]

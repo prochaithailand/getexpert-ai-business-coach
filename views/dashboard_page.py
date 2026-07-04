@@ -4,12 +4,12 @@ from copy import deepcopy
 from html import escape
 from typing import Any
 
+import pandas as pd
 import streamlit as st
 
 from models import MemberProfile
 from services.coach_service import CoachService, LocalCoachService
 from services.dashboard_service import (
-    EMPTY_DASHBOARD_MESSAGE,
     build_and_save_dashboard,
     dashboard_context,
     dashboard_signature,
@@ -21,17 +21,29 @@ from services.pdf_report_service import (
     thai_pdf_fonts_available,
     thai_pdf_font_paths,
 )
+from translations import translate
+
+
+def _language() -> str:
+    return str(st.session_state.get("language", "th"))
+
+
+def _t(key: str, **values: object) -> str:
+    text = translate(key, _language())
+    return text.format(**values) if values else text
 
 
 def render_member_dashboard(profile: MemberProfile | None, coach: CoachService) -> None:
-    st.title("Dashboard สมาชิก")
+    brand = st.session_state.get("_active_brand", {})
+    title = _t("Member Dashboard Title", short_name=brand.get("short_name", "GetExpert"))
+    st.title(title)
     st.markdown(
-        "<p class='section-lead'>ภาพรวมความสำเร็จส่วนบุคคลจากโปรไฟล์ แผน 30 วัน Workplan และการใช้งานเครื่องมือ AI</p>",
+        f"<p class='section-lead'>{_t('Dashboard Page Description')}</p>",
         unsafe_allow_html=True,
     )
     snapshot = build_and_save_dashboard(st.session_state, profile)
     if snapshot is None:
-        st.info(EMPTY_DASHBOARD_MESSAGE)
+        st.info(_t("Dashboard Insufficient Data"))
         return
 
     _render_cards(snapshot)
@@ -46,51 +58,51 @@ def _render_cards(snapshot: dict[str, Any]) -> None:
     plan = snapshot["plan"]
     contacts = snapshot["contacts"]
     goals = snapshot["goals"]
-    st.subheader("ภาพรวมสมาชิก")
+    st.subheader(_t("Member Overview"))
     _card_row(
         (
-            ("ชื่อสมาชิก", escape(snapshot["name"])),
-            ("เป้าหมายรายได้", f"{snapshot['income_goal']:,.0f} บาท"),
-            ("ความคืบหน้าแผน 30 วัน", f"{plan['percentage']:.0f}%"),
-            ("คะแนน PP", f"{plan['pp_score']} PP"),
+            (_t("Member Name"), escape(snapshot["name"])),
+            (_t("Income Goal"), f"{snapshot['income_goal']:,.0f} {_t('Currency Baht')}"),
+            (_t("30-Day Plan Progress"), f"{plan['percentage']:.0f}%"),
+            (_t("PP Score"), f"{plan['pp_score']} PP"),
         )
     )
     _card_row(
         (
-            ("จำนวนรายชื่อทั้งหมด", f"{contacts['total']} ราย"),
-            ("รายชื่อ A", f"{contacts['A']} ราย"),
-            ("รายชื่อ B", f"{contacts['B']} ราย"),
-            ("รายชื่อ C", f"{contacts['C']} ราย"),
+            (_t("Total Prospects"), f"{contacts['total']} {_t('Prospect Unit')}"),
+            ("A", f"{contacts['A']} {_t('Prospect Unit')}"),
+            ("B", f"{contacts['B']} {_t('Prospect Unit')}"),
+            ("C", f"{contacts['C']} {_t('Prospect Unit')}"),
         )
     )
     _card_row(
         (
-            ("รายชื่อ D", f"{contacts['D']} ราย"),
-            ("ผู้มุ่งหวังสมัครแล้ว", f"{contacts['signed_up']} ราย"),
-            ("ผู้มุ่งหวังนัดหมายแล้ว", f"{contacts['appointments']} ราย"),
+            ("D", f"{contacts['D']} {_t('Prospect Unit')}"),
+            (_t("Signed Up Prospects"), f"{contacts['signed_up']} {_t('Prospect Unit')}"),
+            (_t("Appointment Prospects"), f"{contacts['appointments']} {_t('Prospect Unit')}"),
         )
     )
     _card_row(
         (
-            ("เป้าหมายสปอนเซอร์", f"{goals['sponsor']['percentage']:.0f}%"),
-            ("เป้าหมายคะแนนทีม", f"{goals['team_points']['percentage']:.0f}%"),
-            ("เป้าหมายรายได้ Workplan", f"{goals['income']['percentage']:.0f}%"),
-            ("สร้างคอนเทนต์", f"{snapshot['usage']['content_creator']} ครั้ง"),
-            ("ใช้งานโค้ช AI", f"{snapshot['usage']['ai_coach']} คำถาม"),
+            (_t("Sponsor Goal"), f"{goals['sponsor']['percentage']:.0f}%"),
+            (_t("Team Points Goal"), f"{goals['team_points']['percentage']:.0f}%"),
+            (_t("Workplan Income Goal"), f"{goals['income']['percentage']:.0f}%"),
+            (_t("Content Created"), f"{snapshot['usage']['content_creator']} {_t('Times Unit')}"),
+            (_t("AI Coach Usage"), f"{snapshot['usage']['ai_coach']} {_t('Questions Unit')}"),
         )
     )
 
 
 def _render_team_cards(snapshot: dict[str, Any]) -> None:
     team = snapshot["team"]
-    st.subheader("ข้อมูลทีม")
+    st.subheader(_t("Team Information"))
     _card_row(
         (
-            ("ชื่อทีม", escape(team["name"] or "ยังไม่ระบุ")),
-            ("รหัสทีม", escape(team["id"] or "ยังไม่ระบุ")),
-            ("หัวหน้าทีม", escape(team["leader"] or "ยังไม่ระบุ")),
-            ("ผู้แนะนำ", escape(team["sponsor"] or "ยังไม่ระบุ")),
-            ("บทบาท", escape(team["role"])),
+            (_t("Team Name"), escape(team["name"] or _t("Not Specified"))),
+            (_t("Team ID"), escape(team["id"] or _t("Not Specified"))),
+            (_t("Team Leader"), escape(team["leader"] or _t("Not Specified"))),
+            (_t("Sponsor"), escape(team["sponsor"] or _t("Not Specified"))),
+            (_t("Role"), escape(team["role"])),
         )
     )
 
@@ -108,67 +120,107 @@ def _card_row(cards: tuple[tuple[str, str], ...]) -> None:
 
 def _render_status(snapshot: dict[str, Any]) -> None:
     plan = snapshot["plan"]
-    st.subheader("ระดับสถานะ")
-    st.markdown(f"**{plan['status']}** — ทำสำเร็จ {plan['completed']} จาก {plan['total']} วัน")
-    st.progress(plan["percentage"] / 100, text=f"ความก้าวหน้า {plan['percentage']:.0f}%")
+    st.subheader(_t("Status Level"))
+    st.markdown(f"**{plan['status']}** — {_t('Dashboard Completed Text', completed=plan['completed'], total=plan['total'])}")
+    st.progress(plan["percentage"] / 100, text=f"{_t('Progress')} {plan['percentage']:.0f}%")
 
 
 def _render_charts(snapshot: dict[str, Any]) -> None:
-    st.subheader("กราฟความก้าวหน้า")
-    plan = snapshot["plan"]
-    goals = snapshot["goals"]
-    charts = (
-        ("แผนปฏิบัติการ 30 วัน", plan["total"], plan["completed"], "วัน"),
-        ("เป้าหมายสปอนเซอร์", goals["sponsor"]["target"], goals["sponsor"]["actual"], "คน"),
-        ("เป้าหมายคะแนนทีม", goals["team_points"]["target"], goals["team_points"]["actual"], "คะแนน"),
-        ("เป้าหมายรายได้", goals["income"]["target"], goals["income"]["actual"], "บาท"),
+    st.subheader(_t("Progress Charts"))
+    charts, goals_empty = _dashboard_chart_entries(
+        snapshot,
+        plan_title=_t("30-Day Plan Page Title"),
+        sponsor_title=_t("Sponsor Goal"),
+        team_points_title=_t("Team Points Goal"),
+        income_title=_t("Income Goal"),
+        days_unit=_t("Days Unit"),
+        people_unit=_t("People Unit"),
+        points_unit=_t("Points Unit"),
+        currency_unit=_t("Currency Baht"),
     )
+    if goals_empty:
+        st.info(_t("Dashboard Goals Empty State"))
     columns = st.columns(2)
     for index, (title, target, actual, unit) in enumerate(charts):
         with columns[index % 2]:
             st.markdown(f"**{title} ({unit})**")
-            st.vega_lite_chart(
-                {
-                    "values": [
-                        {"รายการ": "เป้าหมาย", "ค่า": float(target)},
-                        {"รายการ": "ผลลัพธ์จริง", "ค่า": float(actual)},
-                    ]
-                },
-                {
-                    "height": 230,
-                    "mark": {"type": "bar", "cornerRadiusTopLeft": 6, "cornerRadiusTopRight": 6},
-                    "encoding": {
-                        "x": {
-                            "field": "รายการ",
-                            "type": "nominal",
-                            "axis": {"labelAngle": 0, "title": None},
-                        },
-                        "y": {
-                            "field": "ค่า",
-                            "type": "quantitative",
-                            "axis": {"title": unit},
-                        },
-                        "color": {
-                            "field": "รายการ",
-                            "type": "nominal",
-                            "scale": {
-                                "domain": ["เป้าหมาย", "ผลลัพธ์จริง"],
-                                "range": ["#0B2E59", "#F59E0B"],
-                            },
-                            "legend": {"title": "คำอธิบาย"},
-                        },
-                        "tooltip": [
-                            {"field": "รายการ", "type": "nominal", "title": "รายการ"},
-                            {"field": "ค่า", "type": "quantitative", "title": unit, "format": ",.0f"},
-                        ],
-                    },
-                    "config": {
-                        "axis": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
-                        "legend": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
-                    },
-                },
+            records = _chart_records(
+                target,
+                actual,
+                item_field=_t("Chart Item Field"),
+                value_field=_t("Chart Value Field"),
+                color_field=_t("Legend"),
+                target_label=_t("Target"),
+                actual_label=_t("Actual Result"),
+            )
+            st.bar_chart(
+                pd.DataFrame.from_records(records),
+                x=_t("Chart Item Field"),
+                y=_t("Chart Value Field"),
+                color=_t("Legend"),
+                stack=False,
+                height=260,
                 width="stretch",
             )
+
+
+def _dashboard_chart_entries(
+    snapshot: dict[str, Any],
+    *,
+    plan_title: str = "แผนปฏิบัติการ 30 วัน",
+    sponsor_title: str = "เป้าหมายสปอนเซอร์",
+    team_points_title: str = "เป้าหมายคะแนนทีม",
+    income_title: str = "เป้าหมายรายได้",
+    days_unit: str = "วัน",
+    people_unit: str = "คน",
+    points_unit: str = "คะแนน",
+    currency_unit: str = "บาท",
+) -> tuple[list[tuple[str, Any, Any, str]], bool]:
+    plan = snapshot["plan"]
+    goals = snapshot["goals"]
+    plan_chart = (plan_title, plan["total"], plan["completed"], days_unit)
+    goal_charts = (
+        (sponsor_title, goals["sponsor"]["target"], goals["sponsor"]["actual"], people_unit),
+        (team_points_title, goals["team_points"]["target"], goals["team_points"]["actual"], points_unit),
+        (income_title, goals["income"]["target"], goals["income"]["actual"], currency_unit),
+    )
+    charts = [plan_chart] if _safe_number(plan["total"]) > 0 else []
+    visible_goal_charts = [chart for chart in goal_charts if _safe_number(chart[1]) > 0]
+    charts.extend(visible_goal_charts)
+    return charts, not visible_goal_charts
+
+
+def _safe_number(value: Any) -> float:
+    if value in (None, ""):
+        return 0.0
+    try:
+        return max(0.0, float(str(value).replace(",", "").strip()))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _chart_records(
+    target: Any,
+    actual: Any,
+    *,
+    item_field: str = "รายการ",
+    value_field: str = "ค่า",
+    color_field: str = "คำอธิบาย",
+    target_label: str = "เป้าหมาย",
+    actual_label: str = "ผลลัพธ์จริง",
+) -> list[dict[str, Any]]:
+    return [
+        {
+            item_field: target_label,
+            value_field: _safe_number(target),
+            color_field: target_label,
+        },
+        {
+            item_field: actual_label,
+            value_field: _safe_number(actual),
+            color_field: actual_label,
+        },
+    ]
 
 
 def _render_ai_insight(
@@ -178,15 +230,15 @@ def _render_ai_insight(
 ) -> str | None:
     assert profile is not None
     st.subheader("AI Insight")
-    st.caption("วิเคราะห์จุดแข็ง จุดที่ควรปรับปรุง และแผนลงมือทำสำหรับ 7 วันข้างหน้า")
+    st.caption(_t("AI Insight Description"))
     signature = dashboard_signature(snapshot)
     store = deepcopy(st.session_state.get("dashboard_insights_by_member", {}))
     saved = store.get(snapshot["member_key"], {})
     current_insight = saved.get("insight") if saved.get("signature") == signature else None
 
-    button_label = "อัปเดต AI Insight" if current_insight else "สร้าง AI Insight"
+    button_label = _t("Update AI Insight") if current_insight else _t("Create AI Insight")
     if st.button(button_label, type="primary", width="stretch"):
-        with st.spinner("กำลังวิเคราะห์ข้อมูลความสำเร็จของคุณ..."):
+        with st.spinner(_t("Analyzing Success Data")):
             insight = coach.generate_dashboard_insight(profile, dashboard_context(snapshot))
         store[snapshot["member_key"]] = {"signature": signature, "insight": insight}
         st.session_state.dashboard_insights_by_member = store
@@ -195,9 +247,9 @@ def _render_ai_insight(
     if current_insight:
         st.markdown(current_insight)
     elif getattr(coach, "is_api_enabled", False):
-        st.info("กดปุ่มสร้าง AI Insight เพื่อรับคำแนะนำเฉพาะบุคคลจากข้อมูลล่าสุด")
+        st.info(_t("AI Insight Empty Hint"))
     else:
-        st.info("ระบบจะสร้าง Insight ภาษาไทยแบบพื้นฐาน เนื่องจากยังไม่ได้ตั้งค่า OPENAI_API_KEY")
+        st.info(_t("AI Insight Fallback Hint"))
     return current_insight
 
 
@@ -220,14 +272,14 @@ def _render_pdf_export(
     current_insight: str | None,
 ) -> None:
     assert profile is not None
-    st.subheader("รายงานสมาชิก")
+    st.subheader(_t("Member Report"))
     if not thai_pdf_fonts_available():
         font_paths = thai_pdf_font_paths()
         st.warning(
             f"{MISSING_THAI_FONT_MESSAGE} "
             f"({font_paths['regular'].as_posix()}, {font_paths['bold'].as_posix()})"
         )
-        st.button("ดาวน์โหลดรายงาน PDF", disabled=True, width="stretch")
+        st.button(_t("Download PDF Report"), disabled=True, width="stretch")
         return
     fallback_insight = LocalCoachService().generate_dashboard_insight(
         profile,
@@ -236,13 +288,13 @@ def _render_pdf_export(
     try:
         pdf_data = _pdf_bytes(profile, snapshot, current_insight or fallback_insight)
     except Exception as error:
-        st.error(f"ไม่สามารถสร้างรายงาน PDF ได้: {error}")
+        st.error(f"{_t('PDF Generation Error')}: {error}")
         return
 
     if st.session_state.pop("dashboard_pdf_success", False):
-        st.success("สร้างรายงาน PDF สำเร็จ")
+        st.success(_t("PDF Created Success"))
     st.download_button(
-        "ดาวน์โหลดรายงาน PDF",
+        _t("Download PDF Report"),
         data=pdf_data,
         file_name=member_report_filename(profile.name),
         mime="application/pdf",
