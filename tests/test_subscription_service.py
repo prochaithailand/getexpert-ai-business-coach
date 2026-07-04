@@ -129,7 +129,7 @@ class SubscriptionServiceTests(unittest.TestCase):
             "Dashboard สมาชิก",
             "ตั้งค่าบัญชี",
         )
-        now = datetime(2026, 6, 25, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         trial = start_trial(AppUser("trial@example.com", "Trial"), now)
         navigation = visible_navigation(items, trial)
 

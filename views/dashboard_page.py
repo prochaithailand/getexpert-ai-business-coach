@@ -126,60 +126,138 @@ def _render_status(snapshot: dict[str, Any]) -> None:
 
 def _render_charts(snapshot: dict[str, Any]) -> None:
     st.subheader(_t("Progress Charts"))
-    plan = snapshot["plan"]
-    goals = snapshot["goals"]
-    charts = (
-        (_t("30-Day Plan Page Title"), plan["total"], plan["completed"], _t("Days Unit")),
-        (_t("Sponsor Goal"), goals["sponsor"]["target"], goals["sponsor"]["actual"], _t("People Unit")),
-        (_t("Team Points Goal"), goals["team_points"]["target"], goals["team_points"]["actual"], _t("Points Unit")),
-        (_t("Income Goal"), goals["income"]["target"], goals["income"]["actual"], _t("Currency Baht")),
+    charts, goals_empty = _dashboard_chart_entries(
+        snapshot,
+        plan_title=_t("30-Day Plan Page Title"),
+        sponsor_title=_t("Sponsor Goal"),
+        team_points_title=_t("Team Points Goal"),
+        income_title=_t("Income Goal"),
+        days_unit=_t("Days Unit"),
+        people_unit=_t("People Unit"),
+        points_unit=_t("Points Unit"),
+        currency_unit=_t("Currency Baht"),
     )
+    if goals_empty:
+        st.info(_t("Dashboard Goals Empty State"))
     columns = st.columns(2)
     for index, (title, target, actual, unit) in enumerate(charts):
         with columns[index % 2]:
             st.markdown(f"**{title} ({unit})**")
             st.vega_lite_chart(
-                {
-                    "values": [
-                        {_t("Chart Item Field"): _t("Target"), _t("Chart Value Field"): float(target)},
-                        {_t("Chart Item Field"): _t("Actual Result"), _t("Chart Value Field"): float(actual)},
-                    ]
-                },
-                {
-                    "height": 230,
-                    "mark": {"type": "bar", "cornerRadiusTopLeft": 6, "cornerRadiusTopRight": 6},
-                    "encoding": {
-                        "x": {
-                            "field": _t("Chart Item Field"),
-                            "type": "nominal",
-                            "axis": {"labelAngle": 0, "title": None},
-                        },
-                        "y": {
-                            "field": _t("Chart Value Field"),
-                            "type": "quantitative",
-                            "axis": {"title": unit},
-                        },
-                        "color": {
-                            "field": _t("Chart Item Field"),
-                            "type": "nominal",
-                            "scale": {
-                                "domain": [_t("Target"), _t("Actual Result")],
-                                "range": ["#0B2E59", "#F59E0B"],
-                            },
-                            "legend": {"title": _t("Legend")},
-                        },
-                        "tooltip": [
-                            {"field": _t("Chart Item Field"), "type": "nominal", "title": _t("Chart Item Field")},
-                            {"field": _t("Chart Value Field"), "type": "quantitative", "title": unit, "format": ",.0f"},
-                        ],
-                    },
-                    "config": {
-                        "axis": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
-                        "legend": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
-                    },
-                },
+                _progress_chart_spec(
+                    _chart_values(
+                        target,
+                        actual,
+                        item_field=_t("Chart Item Field"),
+                        value_field=_t("Chart Value Field"),
+                        target_label=_t("Target"),
+                        actual_label=_t("Actual Result"),
+                    ),
+                    item_field=_t("Chart Item Field"),
+                    value_field=_t("Chart Value Field"),
+                    unit=unit,
+                    target_label=_t("Target"),
+                    actual_label=_t("Actual Result"),
+                    legend_title=_t("Legend"),
+                ),
                 width="stretch",
             )
+
+
+def _dashboard_chart_entries(
+    snapshot: dict[str, Any],
+    *,
+    plan_title: str = "แผนปฏิบัติการ 30 วัน",
+    sponsor_title: str = "เป้าหมายสปอนเซอร์",
+    team_points_title: str = "เป้าหมายคะแนนทีม",
+    income_title: str = "เป้าหมายรายได้",
+    days_unit: str = "วัน",
+    people_unit: str = "คน",
+    points_unit: str = "คะแนน",
+    currency_unit: str = "บาท",
+) -> tuple[list[tuple[str, Any, Any, str]], bool]:
+    plan = snapshot["plan"]
+    goals = snapshot["goals"]
+    plan_chart = (plan_title, plan["total"], plan["completed"], days_unit)
+    goal_charts = (
+        (sponsor_title, goals["sponsor"]["target"], goals["sponsor"]["actual"], people_unit),
+        (team_points_title, goals["team_points"]["target"], goals["team_points"]["actual"], points_unit),
+        (income_title, goals["income"]["target"], goals["income"]["actual"], currency_unit),
+    )
+    charts = [plan_chart] if _safe_number(plan["total"]) > 0 else []
+    visible_goal_charts = [chart for chart in goal_charts if _safe_number(chart[1]) > 0]
+    charts.extend(visible_goal_charts)
+    return charts, not visible_goal_charts
+
+
+def _safe_number(value: Any) -> float:
+    if value in (None, ""):
+        return 0.0
+    try:
+        return max(0.0, float(str(value).replace(",", "").strip()))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _chart_values(
+    target: Any,
+    actual: Any,
+    *,
+    item_field: str = "รายการ",
+    value_field: str = "ค่า",
+    target_label: str = "เป้าหมาย",
+    actual_label: str = "ผลลัพธ์จริง",
+) -> list[dict[str, Any]]:
+    return [
+        {item_field: target_label, value_field: _safe_number(target)},
+        {item_field: actual_label, value_field: _safe_number(actual)},
+    ]
+
+
+def _progress_chart_spec(
+    values: list[dict[str, Any]],
+    *,
+    item_field: str,
+    value_field: str,
+    unit: str,
+    target_label: str = "เป้าหมาย",
+    actual_label: str = "ผลลัพธ์จริง",
+    legend_title: str = "คำอธิบาย",
+) -> dict[str, Any]:
+    return {
+        "data": {"values": values},
+        "height": 230,
+        "mark": {"type": "bar", "cornerRadiusTopLeft": 6, "cornerRadiusTopRight": 6},
+        "encoding": {
+            "x": {
+                "field": item_field,
+                "type": "nominal",
+                "axis": {"labelAngle": 0, "title": None},
+            },
+            "y": {
+                "field": value_field,
+                "type": "quantitative",
+                "axis": {"title": unit},
+            },
+            "color": {
+                "field": item_field,
+                "type": "nominal",
+                "scale": {
+                    "domain": [target_label, actual_label],
+                    "range": ["#0B2E59", "#F59E0B"],
+                },
+                "legend": {"title": legend_title},
+            },
+            "tooltip": [
+                {"field": item_field, "type": "nominal", "title": item_field},
+                {"field": value_field, "type": "quantitative", "title": unit, "format": ",.0f"},
+            ],
+        },
+        "config": {
+            "axis": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
+            "legend": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
+        },
+    }
 
 
 def _render_ai_insight(
