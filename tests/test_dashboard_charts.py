@@ -1,26 +1,25 @@
 import unittest
 
 from views.dashboard_page import (
-    _chart_values,
+    _chart_records,
     _dashboard_chart_entries,
-    _progress_chart_spec,
     _safe_number,
 )
 
 
 class DashboardChartTests(unittest.TestCase):
-    def test_thirty_day_progress_chart_uses_total_and_completed_values(self) -> None:
-        values = _chart_values(30, 11)
-        spec = _progress_chart_spec(
-            values,
+    def test_thirty_day_progress_chart_records_use_total_and_completed_values(self) -> None:
+        records = _chart_records(
+            30,
+            7,
             item_field="รายการ",
             value_field="ค่า",
-            unit="วัน",
         )
 
-        self.assertEqual(spec["data"]["values"][0]["ค่า"], 30)
-        self.assertEqual(spec["data"]["values"][1]["ค่า"], 11)
-        self.assertNotIn("values", spec)
+        self.assertEqual(records[0]["รายการ"], "เป้าหมาย")
+        self.assertEqual(records[0]["ค่า"], 30)
+        self.assertEqual(records[1]["รายการ"], "ผลลัพธ์จริง")
+        self.assertEqual(records[1]["ค่า"], 7)
 
     def test_workplan_target_bar_renders_when_actual_is_zero(self) -> None:
         snapshot = {

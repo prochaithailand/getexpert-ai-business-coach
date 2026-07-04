@@ -4,6 +4,7 @@ from copy import deepcopy
 from html import escape
 from typing import Any
 
+import pandas as pd
 import streamlit as st
 
 from models import MemberProfile
@@ -143,23 +144,22 @@ def _render_charts(snapshot: dict[str, Any]) -> None:
     for index, (title, target, actual, unit) in enumerate(charts):
         with columns[index % 2]:
             st.markdown(f"**{title} ({unit})**")
-            st.vega_lite_chart(
-                _progress_chart_spec(
-                    _chart_values(
-                        target,
-                        actual,
-                        item_field=_t("Chart Item Field"),
-                        value_field=_t("Chart Value Field"),
-                        target_label=_t("Target"),
-                        actual_label=_t("Actual Result"),
-                    ),
-                    item_field=_t("Chart Item Field"),
-                    value_field=_t("Chart Value Field"),
-                    unit=unit,
-                    target_label=_t("Target"),
-                    actual_label=_t("Actual Result"),
-                    legend_title=_t("Legend"),
-                ),
+            records = _chart_records(
+                target,
+                actual,
+                item_field=_t("Chart Item Field"),
+                value_field=_t("Chart Value Field"),
+                color_field=_t("Legend"),
+                target_label=_t("Target"),
+                actual_label=_t("Actual Result"),
+            )
+            st.bar_chart(
+                pd.DataFrame.from_records(records),
+                x=_t("Chart Item Field"),
+                y=_t("Chart Value Field"),
+                color=_t("Legend"),
+                stack=False,
+                height=260,
                 width="stretch",
             )
 
@@ -199,65 +199,28 @@ def _safe_number(value: Any) -> float:
         return 0.0
 
 
-def _chart_values(
+def _chart_records(
     target: Any,
     actual: Any,
     *,
     item_field: str = "รายการ",
     value_field: str = "ค่า",
+    color_field: str = "คำอธิบาย",
     target_label: str = "เป้าหมาย",
     actual_label: str = "ผลลัพธ์จริง",
 ) -> list[dict[str, Any]]:
     return [
-        {item_field: target_label, value_field: _safe_number(target)},
-        {item_field: actual_label, value_field: _safe_number(actual)},
+        {
+            item_field: target_label,
+            value_field: _safe_number(target),
+            color_field: target_label,
+        },
+        {
+            item_field: actual_label,
+            value_field: _safe_number(actual),
+            color_field: actual_label,
+        },
     ]
-
-
-def _progress_chart_spec(
-    values: list[dict[str, Any]],
-    *,
-    item_field: str,
-    value_field: str,
-    unit: str,
-    target_label: str = "เป้าหมาย",
-    actual_label: str = "ผลลัพธ์จริง",
-    legend_title: str = "คำอธิบาย",
-) -> dict[str, Any]:
-    return {
-        "data": {"values": values},
-        "height": 230,
-        "mark": {"type": "bar", "cornerRadiusTopLeft": 6, "cornerRadiusTopRight": 6},
-        "encoding": {
-            "x": {
-                "field": item_field,
-                "type": "nominal",
-                "axis": {"labelAngle": 0, "title": None},
-            },
-            "y": {
-                "field": value_field,
-                "type": "quantitative",
-                "axis": {"title": unit},
-            },
-            "color": {
-                "field": item_field,
-                "type": "nominal",
-                "scale": {
-                    "domain": [target_label, actual_label],
-                    "range": ["#0B2E59", "#F59E0B"],
-                },
-                "legend": {"title": legend_title},
-            },
-            "tooltip": [
-                {"field": item_field, "type": "nominal", "title": item_field},
-                {"field": value_field, "type": "quantitative", "title": unit, "format": ",.0f"},
-            ],
-        },
-        "config": {
-            "axis": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
-            "legend": {"labelColor": "#1F2937", "titleColor": "#1F2937"},
-        },
-    }
 
 
 def _render_ai_insight(

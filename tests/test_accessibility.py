@@ -99,21 +99,18 @@ class AccessibilityThemeTests(unittest.TestCase):
         self.assertNotIn("supabase_sync_error", app_source)
 
     def test_dashboard_charts_define_distinct_target_and_actual_colors(self) -> None:
-        from views.dashboard_page import _chart_values, _progress_chart_spec
+        from views.dashboard_page import _chart_records
 
-        spec = _progress_chart_spec(
-            _chart_values(10, 5, target_label="เป้าหมาย", actual_label="ผลลัพธ์จริง"),
+        records = _chart_records(
+            10,
+            5,
             item_field="รายการ",
             value_field="ค่า",
-            unit="วัน",
-            target_label="เป้าหมาย",
-            actual_label="ผลลัพธ์จริง",
-            legend_title="คำอธิบาย",
+            color_field="คำอธิบาย",
         )
 
-        scale = spec["encoding"]["color"]["scale"]
-        self.assertEqual(scale["domain"], ["เป้าหมาย", "ผลลัพธ์จริง"])
-        self.assertEqual(scale["range"], ["#0B2E59", "#F59E0B"])
+        self.assertEqual([record["คำอธิบาย"] for record in records], ["เป้าหมาย", "ผลลัพธ์จริง"])
+        self.assertEqual([record["รายการ"] for record in records], ["เป้าหมาย", "ผลลัพธ์จริง"])
 
     def test_streamlit_cloud_branding_and_toolbar_are_hidden_globally(self) -> None:
         css = Path("ui/styles.py").read_text(encoding="utf-8")
