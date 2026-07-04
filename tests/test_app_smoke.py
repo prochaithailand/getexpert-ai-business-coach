@@ -83,6 +83,19 @@ class AppSmokeTests(unittest.TestCase):
         self.assertTrue(callable(render_knowledge_base))
         self.assertNotIn("คลังความรู้", NAV_ITEMS)
 
+    def test_sidebar_branding_does_not_render_orphan_html_tags(self) -> None:
+        app = AppTest.from_file("app.py", default_timeout=10).run()
+
+        markdown_values = [item.value for item in app.markdown]
+        visible_markdown = "\n".join(markdown_values)
+        brand_markup = next(
+            value for value in markdown_values if "brand-block" in value
+        )
+
+        self.assertIn("GetExpert AI Business Coach", visible_markdown)
+        self.assertNotIn("</div>", [value.strip() for value in markdown_values])
+        self.assertEqual(brand_markup.count("<div"), brand_markup.count("</div>"))
+
     def test_home_onboarding_renders_all_ctas_and_navigates(self) -> None:
         app = _authenticate_app(AppTest.from_file("app.py", default_timeout=10).run())
         profile = MemberProfile(name="สมาชิกใหม่", occupation="เจ้าของกิจการ")

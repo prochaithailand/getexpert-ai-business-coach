@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import replace
+from html import escape
 from pathlib import Path
 
 import streamlit as st
@@ -137,21 +138,22 @@ def render_language_selector(key: str) -> None:
 
 
 def render_brand_block() -> None:
-    powered_by = ACTIVE_BRAND.get("powered_by", "")
+    mark = escape(str(ACTIVE_BRAND.get("mark", "GE")))
+    app_name = escape(str(ACTIVE_BRAND["app_name"]))
+    tagline = escape(str(ACTIVE_BRAND.get("subtitle") or APP_SUBTITLE))
+    powered_by = escape(str(ACTIVE_BRAND.get("powered_by", "")))
     powered_html = f"<div class='brand-powered'>{powered_by}</div>" if powered_by else ""
-    st.markdown(
-        f"""
-        <div class="brand-block">
-            <div class="brand-mark">{ACTIVE_BRAND.get("mark", "GE")}</div>
-            <div>
-                <div class="brand-name">{ACTIVE_BRAND["app_name"]}</div>
-                <div class="brand-tagline">{ACTIVE_BRAND.get("subtitle") or APP_SUBTITLE}</div>
-                {powered_html}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    brand_html = (
+        "<div class='brand-block'>"
+        f"<div class='brand-mark'>{mark}</div>"
+        "<div class='brand-copy'>"
+        f"<div class='brand-name'>{app_name}</div>"
+        f"<div class='brand-tagline'>{tagline}</div>"
+        f"{powered_html}"
+        "</div>"
+        "</div>"
     )
+    st.markdown(brand_html, unsafe_allow_html=True)
 
 
 def render_mobile_menu_toggle() -> None:
