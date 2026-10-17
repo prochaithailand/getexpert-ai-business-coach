@@ -54,6 +54,9 @@ def render_login(store: SessionUserStore) -> None:
             width="stretch",
             disabled=login_in_progress,
         )
+    if st.button(_t("Start Using"), key="start_using_button", width="stretch"):
+        st.session_state["auth_page_override"] = "สมัครสมาชิก"
+        st.rerun()
     if submitted and not login_in_progress:
         st.session_state["login_in_progress"] = True
         st.session_state["pending_login_email"] = email

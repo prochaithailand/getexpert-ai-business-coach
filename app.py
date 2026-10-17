@@ -568,7 +568,7 @@ if authenticated_user is None:
         render_brand_block()
         render_language_selector("auth_language")
         language = current_language()
-        auth_page = st.radio(
+        auth_page = st.session_state.pop("auth_page_override", None) or st.radio(
             translate("Account Menu", language),
             ("เข้าสู่ระบบ", "สมัครสมาชิก", "ลืมรหัสผ่าน"),
             label_visibility="collapsed",
