@@ -15,7 +15,6 @@ from services.subscription_service import (
     apply_subscription_action,
     effective_subscription_status,
     normalize_subscription_user,
-    start_trial,
 )
 
 
@@ -61,11 +60,11 @@ class SessionUserStore:
                 marketing_email_opt_in=marketing_email_opt_in,
             )
             auth_user = payload.get("user", {})
-            user = start_trial(AppUser(
+            user = AppUser(
                 normalized_email, full_name.strip(), "Member", "",
                 subscription_status="pending_payment", subscription_plan="Member",
                 marketing_email_opt_in=marketing_email_opt_in,
-            ))
+            )
             users = dict(self.state.get(USER_STORE_KEY, {}))
             users[normalized_email] = user.to_dict()
             self.state[USER_STORE_KEY] = users
@@ -81,7 +80,7 @@ class SessionUserStore:
         users = dict(self.state.get(USER_STORE_KEY, {}))
         if normalized_email in users:
             raise ValueError("อีเมลนี้มีบัญชีอยู่แล้ว")
-        user = start_trial(AppUser(
+        user = AppUser(
             email=normalized_email,
             full_name=full_name.strip(),
             role="Member",
@@ -89,7 +88,7 @@ class SessionUserStore:
             subscription_status="pending_payment",
             subscription_plan="Member",
             marketing_email_opt_in=marketing_email_opt_in,
-        ))
+        )
         users[normalized_email] = user.to_dict()
         self.state[USER_STORE_KEY] = users
         return user

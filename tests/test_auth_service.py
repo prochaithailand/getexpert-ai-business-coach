@@ -29,11 +29,11 @@ class AuthServiceTests(unittest.TestCase):
         supabase.load_user_data.assert_called_once_with(state, authenticated)
         self.assertEqual(state["pending_invite_code"], "INVITE123")
         self.assertEqual(user.role, "Member")
-        self.assertEqual(user.subscription_status, "trialing")
+        self.assertEqual(user.subscription_status, "pending_payment")
         self.assertEqual(user.subscription_plan, "Member")
-        self.assertTrue(user.trial_used)
-        self.assertTrue(user.trial_started_at)
-        self.assertTrue(user.trial_ends_at)
+        self.assertFalse(user.trial_used)
+        self.assertFalse(user.trial_started_at)
+        self.assertFalse(user.trial_ends_at)
         self.assertTrue(user.marketing_email_opt_in)
         supabase.sign_up.assert_called_once_with(
             "member@example.com",
@@ -51,6 +51,10 @@ class AuthServiceTests(unittest.TestCase):
         self.assertEqual(user.email, "member@example.com")
         self.assertEqual(user.role, "Member")
         self.assertFalse(user.marketing_email_opt_in)
+        self.assertEqual(user.subscription_status, "pending_payment")
+        self.assertFalse(user.trial_used)
+        self.assertFalse(user.trial_started_at)
+        self.assertFalse(user.trial_ends_at)
         self.assertNotEqual(state[USER_STORE_KEY][user.email]["password_hash"], "strong-pass")
         self.assertTrue(state[USER_STORE_KEY][user.email]["password_hash"].startswith("pbkdf2_sha256$"))
 

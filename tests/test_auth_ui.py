@@ -406,10 +406,11 @@ class AuthUiTests(unittest.TestCase):
         self.assertEqual(app.session_state[AUTH_USER_KEY]["email"], "new@example.com")
         self.assertEqual(
             app.session_state[AUTH_USER_KEY]["subscription_status"],
-            "trialing",
+            "pending_payment",
         )
-        self.assertIn("หน้าแรก", app.radio[0].options)
-        self.assertNotIn("ชำระเงิน / เปิดใช้งาน", app.radio[0].options)
+        self.assertNotIn("หน้าแรก", app.radio[0].options)
+        self.assertIn("ชำระเงิน / เปิดใช้งาน", app.radio[0].options)
+        self.assertEqual(app.radio[0].value, "ชำระเงิน / เปิดใช้งาน")
         self.assertIn("โปรไฟล์สมาชิก", app.radio[0].options)
         self.assertIn("ออกจากระบบ", app.radio[0].options)
         self.assertNotIn("Team Dashboard", app.radio[0].options)
