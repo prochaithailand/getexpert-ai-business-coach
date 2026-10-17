@@ -1,6 +1,5 @@
 import unittest
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
@@ -49,11 +48,11 @@ class SubscriptionServiceTests(unittest.TestCase):
         visible = "\n".join(
             [*(item.value for item in app.markdown), *(item.value for item in app.warning)]
         )
-        self.assertIn("89 บาท", visible)
-        self.assertNotIn("ยังไม่ได้ตั้งค่า QR Code", visible)
-        self.assertTrue(
-            (Path(__file__).resolve().parents[1] / "assets" / "payment_qr.png").is_file()
-        )
+        self.assertIn("299 บาท", visible)
+        self.assertIn("ปิยะบุตร เนตรสืบสาย", visible)
+        self.assertIn("หมายเลขพร้อมเพย์", visible)
+        self.assertIn("0649789707", visible)
+        self.assertIn("ส่งสลิปพร้อมแจ้งอีเมล", visible)
         self.assertEqual(LINE_OA_URL, "https://lin.ee/YXNuJrR5")
 
     def test_pending_suspended_and_expired_users_are_locked_but_admin_is_not(self):

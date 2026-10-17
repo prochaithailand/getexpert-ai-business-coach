@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import streamlit as st
 
 from models import AppUser
@@ -12,6 +10,9 @@ from services.subscription_service import (
 
 
 LINE_OA_URL = "https://lin.ee/YXNuJrR5"
+PAYMENT_ACCOUNT_NAME = "ปิยะบุตร เนตรสืบสาย"
+PAYMENT_ACCOUNT_NUMBER = "0649789707"
+PAYMENT_AMOUNT = "299 บาท / เดือน"
 
 
 def render_payment_page(user: AppUser) -> None:
@@ -31,18 +32,17 @@ def render_payment_page(user: AppUser) -> None:
         st.write(f"ใช้งานได้ถึง: **{user.subscription_expires_at[:10]}**")
     if user.trial_ends_at:
         st.write(f"สิทธิ์ทดลองใช้ฟรีถึง: **{user.trial_ends_at[:10]}**")
-    st.metric("ค่าบริการแพ็กเกจ Member", "89 บาท / เดือน")
+    st.metric("ค่าบริการแพ็กเกจ Member", PAYMENT_AMOUNT)
     st.write(
-        "กรุณาสแกน QR Code เพื่อชำระเงิน 89 บาท หลังจากชำระเงินแล้ว "
-        "กรุณาส่งสลิปมาที่ LINE OA เพื่อให้ผู้ดูแลระบบตรวจสอบและเปิดใช้งานบัญชี"
+        "กรุณาโอนเงินเข้าบัญชีด้านล่าง หลังจากชำระเงินแล้ว "
+        "กรุณาส่งสลิปพร้อมแจ้งอีเมลที่ใช้สมัครระบบทาง LINE OA "
+        "เพื่อให้ผู้ดูแลระบบตรวจสอบและเปิดใช้งานบัญชี"
     )
-    qr_path = Path(__file__).resolve().parents[1] / "assets" / "payment_qr.png"
-    if qr_path.is_file():
-        st.image(str(qr_path), caption="QR Code ชำระเงิน Member 89 บาท", width=320)
-    else:
-        st.warning(
-            "ยังไม่ได้ตั้งค่า QR Code กรุณาติดต่อผู้ดูแลระบบหรือแจ้งชำระเงินทาง LINE OA"
-        )
+    st.markdown(
+        f"**ชื่อบัญชี:** {PAYMENT_ACCOUNT_NAME}\n\n"
+        f"**หมายเลขพร้อมเพย์:** {PAYMENT_ACCOUNT_NUMBER}\n\n"
+        f"**ยอดชำระ:** {PAYMENT_AMOUNT}"
+    )
     st.markdown(
         f"""
         <style>
